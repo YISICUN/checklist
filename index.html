@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <title>我的多元思维清单</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f4f7f6;
+            margin: 40px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        h2 {
+            border-bottom: 2px solid #2ecc71;
+            padding-bottom: 10px;
+            color: #2c3e50;
+        }
+
+        .item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            margin: 8px 0;
+            background: #fafafa;
+            border-radius: 4px;
+            border-left: 4px solid #3498db;
+        }
+
+        .completed {
+            border-left-color: #bdc3c7;
+            background: #f0f0f0;
+        }
+
+        .completed title {
+            text-decoration: line-through;
+            color: #7f8c8d;
+        }
+
+        button {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #c0392b;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <h2>📋 我的待办事项清单</h2>
+        <div id="todo-list">正在加载云端数据...</div>
+    </div>
+
+    <script>
+        // 🌐 纽结因果：定义我们刚刚写好的全件查询后端接口
+        const API_URL = 'http://localhost:8080/api/item/list';
+
+        // 🔍 核心机能：从后端拉取数据并渲染到网页上
+        function loadTodos() {
+            fetch(API_URL)
+                .then(response => response.json())
+                .then(res => {
+                    // res 就是我们重构后的 Result 对象
+                    if (res.code === 200) {
+                        const items = res.data;
+                        const listDiv = document.getElementById('todo-list');
+
+                        if (items.length === 0) {
+                            listDiv.innerHTML = '<p style="color: #7f8c8d;">目前没有任务，快去添加一个吧！</p>';
+                            return;
+                        }
+
+                        // 循环拼接 HTML 字符串
+                        let html = '';
+                        items.forEach(item => {
+                            const isDone = item.isCompleted === 1;
+                            html += `
+                            <div class="item ${isDone ? 'completed' : ''}">
+                                <span class="title"><strong>${item.title}</strong> - ${item.description || '无描述'}</span>
+                                <button onclick="deleteTodo(${item.id})">物理删除</button>
+                            </div>
+                        `;
+                        });
+                        listDiv.innerHTML = html;
+                    } else {
+                        alert('数据加载失败：' + res.message);
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    document.getElementById('todo-list').innerHTML = '<p style="color: #e74c3c;">无法连接到后端服务，请确认后端已启动！</p>';
+                });
+        }
+
+        // 🗑️ 核心机能：调用我们刚才实装的 DELETE 接口
+        function deleteTodo(id) {
+            if (confirm('确定要斩断这条任务的因果（删除）吗？')) {
+                fetch(`http://localhost:8080/api/item/delete/${id}`, { method: 'DELETE' })
+                    .then(response => response.json())
+                    .then(res => {
+                        if (res.code === 200) {
+                            loadTodos(); // 💡 刷新列表
+                        } else {
+                            alert(res.message);
+                        }
+                    });
+            }
+        }
+
+        // 🚀 网页一打开，立刻执行加载
+        window.onload = loadTodos;
+    </script>
+</body>
+
+</html>
