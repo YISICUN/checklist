@@ -67,6 +67,10 @@
 
     <div class="container">
         <h2>📋 我的待办事项清单</h2>
+        <div style="margin-bottom: 20px;">
+            <input type="text" id="new-todo" placeholder="输入新的待办任务..." style="padding: 8px; width: 70%;">
+            <button onclick="addTodo()" style="background: #2ecc71;">添加任务</button>
+        </div>
         <div id="todo-list">正在加载云端数据...</div>
     </div>
 
@@ -95,7 +99,9 @@
                             const isDone = item.isCompleted === 1;
                             html += `
                             <div class="item ${isDone ? 'completed' : ''}">
-                                <span class="title"><strong>${item.title}</strong> - ${item.description || '无描述'}</span>
+                                <span class="title" onclick="updateTodo(${item.id}, '${item.title}', ${item.isCompleted})" style="cursor:pointer;">
+                                    <strong>${item.title}</strong>
+                                </span>
                                 <button onclick="deleteTodo(${item.id})">物理删除</button>
                             </div>
                         `;
@@ -124,6 +130,58 @@
                         }
                     });
             }
+        }
+
+        // 💡 添加任务：POST 接口
+        function addTodo() {
+            const title = document.getElementById('new-todo').value;
+            if (!title) return alert('任务名不能为空！');
+
+            fetch('https://checklist-backend-bqsf.onrender.com/api/item/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: title, isCompleted: 0 })
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.code === 200) {
+                        document.getElementById('new-todo').value = ''; // 清空输入
+                        loadTodos(); // 刷新列表
+                    } else {
+                        alert('添加失败: ' + data.message);
+                    }
+                });
+        }
+
+        // 💡 切换状态（修改）：PUT/POST 接口
+        function toggleTodo(id, currentStatus) {
+            // 假设后端提供了一个修改接口，或者是根据 id 更新状态
+            fetch(`https://checklist-backend-bqsf.onrender.com/api/item/update/${id}`, {
+                method: 'POST', // 或 PUT，看你的后端实现
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ isCompleted: currentStatus === 1 ? 0 : 1 })
+            })
+                .then(() => loadTodos());
+        }
+
+        // 💡 修改任务：PUT 请求
+        function updateTodo(id, currentTitle, currentStatus) {
+            const newTitle = prompt("修改任务内容:", currentTitle);
+            if (newTitle === null || newTitle === currentTitle) return; // 取消或未修改
+
+            fetch(`https://checklist-backend-bqsf.onrender.com/api/item/update`, {
+                method: 'POST', // 或 PUT，取决于你的 Controller
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: id, title: newTitle, isCompleted: currentStatus })
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.code === 200) {
+                        loadTodos(); // 刷新列表
+                    } else {
+                        alert('修改失败: ' + data.message);
+                    }
+                });
         }
 
         // 🚀 网页一打开，立刻执行加载
