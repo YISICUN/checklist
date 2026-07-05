@@ -43,7 +43,7 @@
             background: #f0f0f0;
         }
 
-        .completed title {
+        .completed .title {
             text-decoration: line-through;
             color: #7f8c8d;
         }
@@ -72,7 +72,7 @@
 
     <script>
         // 🌐 纽结因果：定义我们刚刚写好的全件查询后端接口
-        const API_URL = 'http://localhost:8080/api/item/list';
+        const API_URL = 'https://checklist-backend-bqsf.onrender.com/api/item/list';
 
         // 🔍 核心机能：从后端拉取数据并渲染到网页上
         function loadTodos() {
@@ -114,7 +114,7 @@
         // 🗑️ 核心机能：调用我们刚才实装的 DELETE 接口
         function deleteTodo(id) {
             if (confirm('确定要斩断这条任务的因果（删除）吗？')) {
-                fetch(`http://localhost:8080/api/item/delete/${id}`, { method: 'DELETE' })
+                fetch(`https://checklist-backend-bqsf.onrender.com/api/item/delete/${id}`, { method: 'DELETE' })
                     .then(response => response.json())
                     .then(res => {
                         if (res.code === 200) {
