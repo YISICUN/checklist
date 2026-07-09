@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>我我的待办事项清单 (Vue3 响应式版)</title>
+    <title>我的待办事项清单 (Vue3 响应式版)</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
 
@@ -75,6 +75,14 @@
             cursor: pointer;
             margin-right: 12px;
         }
+
+        .updating {
+            background-color: #ffe6e6 !important;
+            /* 极淡的红色背景 */
+            border-left: 4px solid #e74c3c !important;
+            /* 醒目的红色左边框 */
+            transition: all 0.5s ease;
+        }
     </style>
 </head>
 
@@ -93,9 +101,8 @@
             <p v-if="loading" style="color: #3498db;">正在加载云端数据...</p>
 
             <p v-else-if="todoList.length === 0" style="color: #7f8c8d;">目前没有任务，快去添加一个吧！</p>
-
             <div v-else v-for="item in todoList" :key="item.id" class="item"
-                :class="{ completed: item.isCompleted === 1 }">
+                :class="{ completed: item.isCompleted === 1, updating: item.isUpdating }">
 
                 <div style="display: flex; align-items: center; flex: 1;">
                     <input type="checkbox" class="todo-checkbox" v-model="item.isCompleted" :true-value="1"
@@ -107,8 +114,27 @@
                 </div>
 
                 <div style="margin-left: auto; display: flex; gap: 10px;">
-                    <button @click="updateTodoTitle(item)" style="background: #3498db;">修改</button>
-                    <button @click="deleteTodo(item.id)">删除</button>
+
+                    <div class="time-selector">
+
+                        <span v-if="item.dueDate === '2111-11-11'" class="daily-label">
+                            每日
+                        </span>
+                        <input v-else type="date" v-model="item.dueDate" @change="updateTime(item)"
+                            style="padding: 4px; border: 1px solid #ccc; border-radius: 4px;" />
+                        <select v-model="item.startTime" @change="updateTime(item)" style="padding: 4px;">
+                            <option value="-">-</option>
+                            <option v-for="time in timeOptions" :key="time" :value="time">{{ time }}</option>
+                        </select>
+                    </div>
+
+                    <!-- <button @click="moveTask(item, 'top')" style="background: #95a5a6; padding: 2px 6px;">置顶</button> -->
+                    <button @click="moveTask(item, 'up')" style="background: #95a5a6; padding: 2px 6px;">↑</button>
+                    <button @click="moveTask(item, 'down')" style="background: #95a5a6; padding: 2px 6px;">↓</button>
+                    <!-- <button @click="moveTask(item, 'bottom')" style="background: #95a5a6; padding: 2px 6px;">置底</button> -->
+
+                    <button @click="updateTodoTitle(item)" style="background: #3498db; padding: 2px 6px;">改</button>
+                    <button @click="deleteTodo(item.id)" style="background: #e74c3c; padding: 2px 6px;">删</button>
                 </div>
             </div>
         </div>
@@ -132,8 +158,44 @@
                     loading.value = true;
                     try {
                         const response = await axios.get(`${BASE_URL}/list`);
+
+                        const storedId = sessionStorage.getItem('highlight_id');
+                        const expiry = sessionStorage.getItem('highlight_expiry');
+                        const now = Date.now();
+
                         if (response.data.code === 200) {
-                            todoList.value = response.data.data;
+                            todoList.value = response.data.data.map(item => {
+
+                                // 清洗时间：强制转为 HH:mm 格式
+                                let cleanTime = '-';
+                                if (item.startTime && item.startTime !== '-') {
+
+                                    // 如果包含秒，只截取前5位
+                                    cleanTime = item.startTime.substring(0, 5);
+                                }
+
+                                // 判断：如果有存储的ID，且没过期，则设为 true
+                                const shouldHighlight = (storedId == item.id && now < expiry);
+
+                                if (shouldHighlight) {
+                                    setTimeout(() => {
+                                        item.isUpdating = false;
+                                    }, expiry - now); // 剩余多少秒就再标红多少秒
+                                }
+
+                                return {
+                                    ...item,
+                                    startTime: cleanTime,
+                                    isUpdating: shouldHighlight // <--- 关键点：提前注入
+                                };
+
+                                // 如果过期了，清除存储
+                                if (now >= expiry) {
+                                    sessionStorage.removeItem('highlight_id');
+                                    sessionStorage.removeItem('highlight_expiry');
+                                }
+
+                            });
                         } else {
                             alert('数据加载失败：' + response.data.message);
                         }
@@ -224,6 +286,91 @@
                     }
                 };
 
+                // 时间选择器选项生成（每半小时一个选项）
+                const timeOptions = [];
+                for (let h = 0; h < 24; h++) {
+                    for (let m = 0; m < 60; m += 30) {
+                        const hour = h.toString().padStart(2, '0');
+                        const minute = m.toString().padStart(2, '0');
+                        timeOptions.push(`${hour}:${minute}`);
+                    }
+                }
+
+                // 统一的更新时间逻辑
+                const updateTime = async (item) => {
+                    // 1. 立即给该项设置标红状态
+                    item.isUpdating = true;
+
+                    // 存入当前时间戳，确保能记录是哪一个被更新了
+                    sessionStorage.setItem('highlight_id', item.id);
+                    sessionStorage.setItem('highlight_expiry', Date.now() + 5000); // 5秒后过期
+
+                    try {
+                        await axios.post(`${BASE_URL}/update`, {
+                            id: item.id,
+                            title: item.title,
+                            isCompleted: item.isCompleted,
+                            dueDate: item.dueDate,
+                            startTime: item.startTime
+                        });
+
+                        // 2. 标红 5 秒后恢复
+                        setTimeout(() => {
+                            item.isUpdating = false;
+                        }, 5000);
+
+                        // 3. 排序重排：刷新列表
+                        // 注意：因为刷新会导致 DOM 重绘，只要 item 对象在列表里，状态就会保留
+                        await loadTodos();
+
+                    } catch (err) {
+                        alert("时间更新失败: " + err.message);
+                    }
+                };
+
+                // 更换排序
+                const moveTask = async (item, type) => {
+                    // alert(`移动任务ID=${item.id}，类型=${type}`);
+                    const idx = todoList.value.findIndex(t => t.id === item.id);
+                    let prevOrder = null;
+                    let nextOrder = null;
+
+                    if (type === 'top') {
+                        // 置顶：prev为null，next为当前列表第一个的sortOrder
+                        nextOrder = todoList.value[0].sortOrder;
+                    } else if (type === 'bottom') {
+                        // 置底：prev为当前列表最后一个的sortOrder，next为null
+                        prevOrder = todoList.value[todoList.value.length - 1].sortOrder;
+                    } else if (type === 'up' && idx > 0) {
+                        // 上移：prev为idx-2的，next为idx-1的
+                        prevOrder = idx > 1 ? todoList.value[idx - 2].sortOrder : null;
+                        nextOrder = todoList.value[idx - 1].sortOrder;
+                    } else if (type === 'down' && idx < todoList.value.length - 1) {
+                        // 下移：prev为idx+1的，next为idx+2的
+                        prevOrder = todoList.value[idx + 1].sortOrder;
+                        nextOrder = idx < todoList.value.length - 2 ? todoList.value[idx + 2].sortOrder : null;
+                    } else {
+                        // 边界情况提示
+                        if (type === 'up' || type === 'top') {
+                            alert("已经是顶部啦，不能再往上移动了！");
+                        } else if (type === 'down' || type === 'bottom') {
+                            alert("已经是底部啦，不能再往下移动了！");
+                        }
+                        return; // 已在边界或非法操作
+                    }
+
+                    try {
+                        await axios.post(`${BASE_URL}/move`, {
+                            targetId: item.id,
+                            prevOrder: prevOrder,
+                            nextOrder: nextOrder
+                        });
+                        await loadTodos(); // 重新加载数据刷新列表
+                    } catch (e) {
+                        alert("移动失败: " + e.message);
+                    }
+                };
+
                 // 生命周期钩子：挂载完成时加载数据
                 onMounted(() => {
                     loadTodos();
@@ -237,7 +384,10 @@
                     addTodo,
                     handleStatusToggle,
                     updateTodoTitle,
-                    deleteTodo
+                    deleteTodo,
+                    timeOptions, // 记得暴露给模板
+                    updateTime,
+                    moveTask // 👈 这里一定要加上！
                 };
             }
         }).mount('#app'); // 挂载容器
