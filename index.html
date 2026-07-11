@@ -89,6 +89,18 @@
 <body>
 
     <div id="app" class="container">
+
+        <div class="category-tabs"
+            style="display: flex; gap: 20px; margin-bottom: 20px; border-bottom: 2px solid #e0e0e0; padding-bottom: 10px;">
+            <div v-for="cat in categories" :key="cat.id" @click="activeCategory = cat" :style="{ 
+            cursor: 'pointer', 
+            fontWeight: activeCategory.id === cat.id ? 'bold' : 'normal',
+            color: activeCategory.id === cat.id ? '#3498db' : '#7f8c8d',
+            borderBottom: activeCategory.id === cat.id ? '2px solid #3498db' : 'none'}">
+                {{ cat.name }}
+            </div>
+        </div>
+
         <h2>📋 我的待办事项清单</h2>
 
         <div style="margin-bottom: 20px;">
@@ -100,8 +112,8 @@
         <div id="todo-list">
             <p v-if="loading" style="color: #3498db;">正在加载云端数据...</p>
 
-            <p v-else-if="todoList.length === 0" style="color: #7f8c8d;">目前没有任务，快去添加一个吧！</p>
-            <div v-else v-for="item in todoList" :key="item.id" class="item"
+            <p v-else-if="filteredTodoList.length === 0" style="color: #7f8c8d;">目前没有任务，快去添加一个吧！</p>
+            <div v-else v-for="item in filteredTodoList" :key="item.id" class="item"
                 :class="{ completed: item.isCompleted === 1, updating: item.isUpdating }">
 
                 <div style="display: flex; align-items: center; flex: 1;">
@@ -118,33 +130,53 @@
                     <div class="time-selector">
 
                         <span v-if="item.dueDate === '2111-11-11'" class="daily-label">
-                            每日
+                            <span class="title" @click="updateToday(item)" style="cursor:pointer; flex: 1;">每日</span>
                         </span>
-                        <input v-else type="date" v-model="item.dueDate" @change="updateTime(item)"
+                        <!-- <input v-else type="date" v-model="item.dueDate" @change="updateTime(item)" -->
+                        <input v-else type="date" v-model="item.dueDate" @input="handleDateClear($event, item)"
                             style="padding: 4px; border: 1px solid #ccc; border-radius: 4px;" />
                         <select v-model="item.startTime" @change="updateTime(item)" style="padding: 4px;">
-                            <option value="-">-</option>
                             <option v-for="time in timeOptions" :key="time" :value="time">{{ time }}</option>
                         </select>
                     </div>
 
                     <!-- <button @click="moveTask(item, 'top')" style="background: #95a5a6; padding: 2px 6px;">置顶</button> -->
-                    <button @click="moveTask(item, 'up')" style="background: #95a5a6; padding: 2px 6px;">↑</button>
-                    <button @click="moveTask(item, 'down')" style="background: #95a5a6; padding: 2px 6px;">↓</button>
+                    <!-- <button @click="moveTask(item, 'up')" style="background: #95a5a6; padding: 2px 6px;">↑</button> -->
+                    <!-- <button @click="moveTask(item, 'down')" style="background: #95a5a6; padding: 2px 6px;">↓</button> -->
                     <!-- <button @click="moveTask(item, 'bottom')" style="background: #95a5a6; padding: 2px 6px;">置底</button> -->
 
-                    <button @click="updateTodoTitle(item)" style="background: #3498db; padding: 2px 6px;">改</button>
+                    <button @click="openUpdateDialog(item)" style="background: #3498db; padding: 2px 6px;">改</button>
                     <button @click="deleteTodo(item.id)" style="background: #e74c3c; padding: 2px 6px;">删</button>
                 </div>
             </div>
         </div>
+
+        <dialog id="updateDialog" style="border: 1px solid #ccc; border-radius: 8px; padding: 20px;">
+            <form method="dialog">
+                <h3>修改任务</h3>
+                <p>内容: <input id="newTitleInput" type="text" /></p>
+                <p>分类:
+                    <select id="newCategorySelect">
+                        <option v-for="cat in categories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
+                    </select>
+                </p>
+                <div style="text-align: right;">
+                    <button @click="saveUpdate">确认修改</button>
+                    <button>取消</button>
+                </div>
+            </form>
+        </dialog>
+
     </div>
 
     <script>
-        const { createApp, ref, onMounted } = Vue;
+        const { createApp, ref, onMounted, computed } = Vue;
 
         // 后端基础 API 路径
         const BASE_URL = 'https://checklist-backend-bqsf.onrender.com/api/item';
+
+        // 后端分类MST表取得用 API 路径
+        const BASE_URL_category = 'https://checklist-backend-bqsf.onrender.com/api/category';
 
         createApp({
             setup() {
@@ -152,6 +184,20 @@
                 const todoList = ref([]);
                 const newTodoTitle = ref('');
                 const loading = ref(true);
+
+                // 在 setup() 中定义分类
+                // 1. 响应式存储后端分类
+                const dbCategories = ref([]);
+
+                // 2. 构造一个包含“全部”的完整分类列表
+                const categories = computed(() => {
+                    // id: 0 代表“全部”
+                    // console.log("计算属性 categories 被访问，当前 dbCategories: " + JSON.stringify(dbCategories.value));
+                    return [{ id: 0, name: '全部' }, ...dbCategories.value];
+                });
+
+                // 3. 选中项存储的是整个对象，不仅仅是 id
+                const activeCategory = ref({ id: 0, name: '全部' }); // 当前选中的分类
 
                 // 🔍 查询全件 (GET)
                 const loadTodos = async () => {
@@ -183,17 +229,17 @@
                                     }, expiry - now); // 剩余多少秒就再标红多少秒
                                 }
 
-                                return {
-                                    ...item,
-                                    startTime: cleanTime,
-                                    isUpdating: shouldHighlight // <--- 关键点：提前注入
-                                };
-
                                 // 如果过期了，清除存储
                                 if (now >= expiry) {
                                     sessionStorage.removeItem('highlight_id');
                                     sessionStorage.removeItem('highlight_expiry');
                                 }
+
+                                return {
+                                    ...item,
+                                    startTime: cleanTime,
+                                    isUpdating: shouldHighlight // <--- 关键点：提前注入
+                                };
 
                             });
                         } else {
@@ -210,10 +256,18 @@
                 // 💡 添加任务 (POST)
                 const addTodo = async () => {
                     if (!newTodoTitle.value) return alert('任务名不能为空！');
+                    // 1. 获取当前选中的分类 ID
+                    let targetCategoryId = activeCategory.value.id;
 
+                    console.log("添加任务时，当前选中分类ID:", targetCategoryId, "类型:", typeof targetCategoryId);
+                    // 2. 逻辑守门员：如果选中了“全部”(id=0)，则强制将其 ID 改为 1 (未分类)
+                    if (targetCategoryId === 0) {
+                        targetCategoryId = 1;
+                    }
                     try {
                         const response = await axios.post(`${BASE_URL}/add`, {
                             title: newTodoTitle.value,
+                            categoryId: targetCategoryId,
                             isCompleted: 0
                         });
                         if (response.data.code === 200) {
@@ -252,13 +306,97 @@
                 // 📝 修改任务文本内容 (POST)
                 const updateTodoTitle = async (item) => {
                     const newTitle = prompt("修改任务内容:", item.title);
+                    // 逻辑守门员：处理空值、无变化或取消的情况
                     if (newTitle === null || newTitle === item.title || newTitle.trim() === '') return;
 
                     try {
                         const response = await axios.post(`${BASE_URL}/update`, {
                             id: item.id,
                             title: newTitle,
-                            isCompleted: item.isCompleted
+                            isCompleted: item.isCompleted,
+                            categoryId: item.categoryId
+                        });
+                        if (response.data.code === 200) {
+                            await loadTodos(); // 刷新列表
+                        } else {
+                            alert('修改失败: ' + response.data.message);
+                        }
+                    } catch (err) {
+                        console.error(err);
+                    }
+                };
+
+                // 💬 修改任务内容和分类的对话框
+                // 1. 打开对话框（绑定在你的“改”按钮上）
+                const openUpdateDialog = (item) => {
+                    const dialog = document.getElementById('updateDialog');
+                    // 预填充当前值
+                    document.getElementById('newTitleInput').value = item.title;
+                    document.getElementById('newCategorySelect').value = item.categoryId;
+
+                    // 暂存当前要修改的 item 对象
+                    window.currentItem = item;
+                    dialog.showModal();
+                };
+
+                // 2. 保存修改（在对话框里的“确认修改”按钮触发）
+                const saveUpdate = async () => {
+                    const item = window.currentItem;
+                    const newTitle = document.getElementById('newTitleInput').value;
+                    const newCatId = parseInt(document.getElementById('newCategorySelect').value);
+
+                    // 发送 axios.post 更新
+                    await axios.post(`${BASE_URL}/update`, {
+                        id: item.id,
+                        title: newTitle,
+                        categoryId: newCatId,
+                        isCompleted: item.isCompleted
+                    });
+                    await loadTodos();
+                };
+
+                const handleDateClear = (event, item) => {
+                    // 如果用户点击了清除，event.target.value 会变为空字符串
+                    // console.log("日期选择器触发事件，当前event:", event);
+                    console.log("日期选择器触发事件，当前值:", event.target.value);
+                    if (event.target.value === '') {
+                        // 自动重置为特殊标记
+                        item.dueDate = '2111-11-11';
+                        // console.log("用户清除了日期，自动设置为每日标记:", item.dueDate);
+                    }
+                    updateDate(item);
+                };
+
+                const updateToday = (item) => {
+                    // 1. 获取当天日期并格式化为 YYYY-MM-DD
+                    const today = new Date();
+                    const year = today.getFullYear();
+                    // getMonth() 从 0 开始，所以要 +1；padStart(2, '0') 保证月和日是两位数
+                    const month = String(today.getMonth() + 1).padStart(2, '0');
+                    const day = String(today.getDate()).padStart(2, '0');
+                    const todayStr = `${year}-${month}-${day}`;
+
+                    // 2. 使用这个变量
+                    const newDate = prompt("修改任务截止日期 (格式: YYYY-MM-DD):", todayStr);
+                    if (newDate === null || newDate.trim() === '') return;
+
+                    let finalDate = newDate.trim();
+                    if (finalDate.toLowerCase() === '每日') {
+                        finalDate = '2111-11-11'; // 特殊标记为每日
+                    }
+                    item.dueDate = finalDate;
+                    updateDate(item);
+                };
+
+                // 💡 修改任务截止日期 (POST)
+                const updateDate = async (item) => {
+                    try {
+                        const response = await axios.post(`${BASE_URL}/update`, {
+                            id: item.id,
+                            title: item.title,
+                            isCompleted: item.isCompleted,
+                            dueDate: item.dueDate,
+                            startTime: item.startTime
                         });
                         if (response.data.code === 200) {
                             await loadTodos(); // 刷新列表
@@ -371,8 +509,32 @@
                     }
                 };
 
+                // 计算属性：根据 activeCategory 过滤 todoList
+                const filteredTodoList = computed(() => {
+                    if (activeCategory.value.id === 0) {
+                        return todoList.value;
+                    }
+                    return todoList.value.filter(item => item.categoryId === activeCategory.value.id);
+                });
+
+                // 加载分类数据
+                const loadCategories = async () => {
+                    try {
+                        const res = await axios.get(`${BASE_URL_category}/list`);
+                        dbCategories.value = res.data;
+                        // 关键：更新分类后，如果之前选中的是具体分类，尝试在当前列表中找到对应的对象并恢复
+                        if (activeCategory.value.id !== 0) {
+                            const restored = dbCategories.value.find(c => c.id === activeCategory.value.id);
+                            if (restored) activeCategory.value = restored;
+                        }
+                    } catch (error) {
+                        console.error("加载分类失败", error);
+                    }
+                };
+
                 // 生命周期钩子：挂载完成时加载数据
                 onMounted(() => {
+                    loadCategories();
                     loadTodos();
                 });
 
@@ -381,13 +543,21 @@
                     todoList,
                     newTodoTitle,
                     loading,
+                    categories,
+                    activeCategory,
                     addTodo,
                     handleStatusToggle,
                     updateTodoTitle,
+                    openUpdateDialog,
+                    saveUpdate,
+                    handleDateClear,
+                    updateToday,
+                    updateDate,
                     deleteTodo,
-                    timeOptions, // 记得暴露给模板
+                    timeOptions,
                     updateTime,
-                    moveTask // 👈 这里一定要加上！
+                    moveTask,
+                    filteredTodoList
                 };
             }
         }).mount('#app'); // 挂载容器
