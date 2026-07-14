@@ -484,7 +484,7 @@
                 const deleteTodo = async (id) => {
                     if (confirm('确定要斩断这条任务的因果（删除）吗？')) {
                         try {
-                            const response = await axios.delete(`${BASE_URL_item}/delete/${id}`);
+                            const response = await request.delete(`/item/delete/${id}`);
                             if (response.data.code === 200) {
                                 await loadTodos(); // 刷新列表
                             } else {
