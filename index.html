@@ -598,7 +598,7 @@
                 request.interceptors.request.use(config => {
                     const userId = localStorage.getItem('userId');
                     if (userId) {
-                        config.headers['X-User-ID'] = userId;
+                        config.headers['userId'] = userId;
                     }
                     return config;
                 }, error => Promise.reject(error));
