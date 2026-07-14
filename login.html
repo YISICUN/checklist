@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <title>登录 - 待办事项系统</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="js/api.js"></script>
+
+    <style>
+        body {
+            font-family: sans-serif;
+            background: #f4f7f6;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .login-container {
+            background: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            width: 300px;
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            box-sizing: border-box;
+        }
+
+        button {
+            width: 100%;
+            padding: 10px;
+            background: #3498db;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app" class="login-container">
+        <h2>用户登录</h2>
+        <form @submit.prevent="login">
+            <input v-model="loginForm.id" type="text" name="username" autocomplete="username" placeholder="用户ID">
+            <input v-model="loginForm.password" type="password" name="current-password" autocomplete="current-password"
+                placeholder="密码">
+            <button type="submit">登录</button>
+            <div style="margin-top: 15px; text-align: center; font-size: 14px; color: #666;">
+                还没有账号？
+                <a href="register.html" style="color: #3498db; text-decoration: none;">立即注册</a>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        const { createApp, reactive } = Vue;
+
+        createApp({
+            setup() {
+                const loginForm = reactive({ id: '', password: '' });
+
+                const login = async () => {
+                    if (!loginForm.id || !loginForm.password) return alert("请填写完整");
+
+                    try {
+                        const res = await axios.post(`${BASE_URL}/auth/login`, {
+                            id: loginForm.id,
+                            password: loginForm.password
+                        });
+
+                        if (res.data.code === 200) {
+                            localStorage.setItem('userId', loginForm.id);
+                            window.location.href = 'index.html';
+                        } else {
+                            alert(res.data.message);
+                        }
+                    } catch (e) {
+                        // 1. 判断是否是 Axios 请求错误（即有响应但非 2xx 状态码）
+                        if (e.response) {
+                            const { status, data } = e.response;
+
+                            // 2. 根据状态码给予更准确的反馈
+                            if (status === 401) {
+                                alert("登录失败: ID 或密码不正确");
+                            } else if (status === 404) {
+                                alert("登录失败: 登录接口不存在，请检查后端路径");
+                            } else if (data && data.message) {
+                                // 如果后端返回了标准的错误对象（如 {code: 500, message: "xxx"}）
+                                alert("错误: " + data.message);
+                            } else {
+                                alert(`请求错误 (状态码: ${status})`);
+                            }
+                        } else if (e.request) {
+                            // 3. 请求发出去了，但没收到响应（可能是网络断了或后端服务崩溃）
+                            alert("无法连接到服务器，请检查网络或后端是否启动");
+                        } else {
+                            // 4. 其他代码逻辑错误
+                            console.error("代码运行错误:", e);
+                            alert("系统异常，请查看控制台日志");
+                        }
+                    }
+                };
+
+                return { loginForm, login };
+            }
+        }).mount('#app');
+    </script>
+</body>
+
+</html>

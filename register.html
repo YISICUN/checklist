@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <title>登录 - 待办事项系统</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="js/api.js"></script>
+
+    <style>
+        body {
+            font-family: sans-serif;
+            background: #f4f7f6;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .register-container {
+            background: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            width: 300px;
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            box-sizing: border-box;
+        }
+
+        button {
+            width: 100%;
+            padding: 10px;
+            background: #3498db;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app" class="register-container">
+        <h2>用户注册</h2>
+        <form @submit.prevent="register">
+            <input v-model="registerForm.username" type="text" placeholder="用户名" required>
+            <input v-model="registerForm.password" type="password" placeholder="密码" required>
+            <button type="submit">注册</button>
+        </form>
+
+    </div>
+
+    <script>
+        const { createApp, reactive } = Vue;
+
+        createApp({
+            setup() {
+                const registerForm = reactive({ id: '', password: '' });
+
+                // 在 register.html 中，将请求路径改为后端注册接口
+                const register = async () => {
+                    try {
+                        const res = await axios.post('https://checklist-backend-bqsf.onrender.com/api/auth/register', {
+                            username: registerForm.username,
+                            password: registerForm.password
+                        });
+
+                        if (res.data.code === 200) {
+                            console.log("res:" + res);
+                            console.log("res.data:" + res.data);
+                            console.log("res.data.data:" + res.data.data);
+                            console.log("res.data.value:" + res.data.value);
+                            console.log("res.data.data.username:" + res.data.data.username);
+                            const newUser = res.data.data;
+                            alert(`注册成功！\n您的ID: ${newUser.id}\n用户名: ${newUser.username}\n已自动登录，正在跳转到首页...`);
+                            localStorage.setItem('userId', newUser.id);
+                            window.location.href = 'index.html';
+
+                        } else {
+                            alert(res.data.message);
+                        }
+                    } catch (e) {
+                        if (e.response && e.response.data) {
+                            // 如果后端返回了错误信息，直接显示在弹窗里
+                            alert("注册失败: " + (e.response.data.message || "服务器内部错误"));
+                            console.error("后端详细反馈:", e.response.data);
+                        } else {
+                            alert("网络连接异常，请检查后端服务是否启动");
+                        }
+                    }
+                };
+
+                return { registerForm, register };
+            }
+        }).mount('#app');
+    </script>
+</body>
+
+</html>
