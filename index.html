@@ -355,7 +355,7 @@
                         // 3. 发送批量请求
                         // const response = await axios.post(`${BASE_URL_item}/updateBatch`, itemsToUpdate);
                         // 确保使用配置好的拦截器实例
-                        const response = await request.post('/item/update', itemsToUpdate);
+                        const response = await request.post('/item/updateBatch', itemsToUpdate);
 
                         // 4. 根据后端返回的 code 处理结果
                         if (response.data.code === 200) {
