@@ -4,9 +4,11 @@
 <head>
     <meta charset="UTF-8">
     <title>登录 - 待办事项系统</title>
-    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="https://unpkg.com/vue@3.5.40/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/axios@1.7.2/dist/axios.min.js"></script>
     <script src="js/api.js"></script>
+    <link rel="shortcut icon" href="assets/images/favicon.ico" type="image/x-icon">
+    <link rel="icon" sizes="32x32" href="assets/images/favicon.ico">
 
     <style>
         body {
@@ -49,19 +51,23 @@
     <div id="app" class="register-container">
         <h2>用户注册</h2>
         <form @submit.prevent="register">
-            <input v-model="registerForm.username" type="text" placeholder="用户名" required>
-            <input v-model="registerForm.password" type="password" placeholder="密码" required>
+            <input name="registerUsername" v-model="registerForm.username" type="text" placeholder="用户名" required>
+            <input name="registerPassword" v-model="registerForm.password" type="password" placeholder="密码" required>
             <button type="submit">注册</button>
         </form>
+
+        <div style="margin-top: 15px; text-align: center; font-size: 14px; color: #666;">
+            <a href="login.html" style="color: #3498db;">去登录</a>
+        </div>
 
     </div>
 
     <script>
-        const { createApp, reactive } = Vue;
+        const { createApp, reactive, onMounted } = Vue;
 
         createApp({
             setup() {
-                const registerForm = reactive({ id: '', password: '' });
+                const registerForm = reactive({ username: '', password: '' });
 
                 // 在 register.html 中，将请求路径改为后端注册接口
                 const register = async () => {
@@ -96,7 +102,24 @@
                     }
                 };
 
-                return { registerForm, register };
+
+                // 强制聚焦输入框函数
+                const focusInput = () => {
+                    // 💡 新增：强制聚焦到输入框
+                    setTimeout(() => {
+                        const input = document.querySelector('input[type="text"]');
+                        if (input) {
+                            input.focus();
+                        }
+                    }, 500); // 延迟 500ms，确保数据加载完成且 DOM 渲染完毕
+                };
+
+                // 在 onMounted 中调用，确保页面加载即聚焦
+                onMounted(() => {
+                    focusInput();
+                });
+
+                return { registerForm, register, focusInput };
             }
         }).mount('#app');
     </script>
