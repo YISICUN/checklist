@@ -2,8 +2,17 @@
 <html lang="zh-CN">
 
 <head>
+    <!-- 设置字符编码 -->
     <meta charset="UTF-8">
-    <title>我的待办事项清单 (Vue3 响应式版)</title>
+
+    <!-- 设置视口（用于响应式适配） -->
+    <!-- HTML 规范要求每个 <meta> 标签有不同的职责。你需要把它们拆分成两个独立的标签。 -->
+    <!-- viewport 指的是“视口”，也就是网页在设备屏幕上可见的区域。 -->
+    <!-- width=device-width 含义：将视口的宽度设定为“设备的宽度”。 -->
+    <!-- initial-scale=1.0 含义：设定页面的“初始缩放比例”为 1.0（即 1:1，不缩放）。 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>检查清单 (Vue3 响应式版)</title>
     <script src="https://unpkg.com/vue@3.5.40/dist/vue.global.js"></script>
     <script src="https://unpkg.com/axios@1.7.2/dist/axios.min.js"></script>
     <script src="js/api.js"></script>
@@ -15,7 +24,10 @@
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: #f4f7f6;
+
+            /* 默认电脑端留白 */
             margin: 40px;
+
             color: #333;
         }
 
@@ -28,6 +40,34 @@
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
 
+        /* --- 新增：手机端适配 --- */
+        /* @media（媒体查询）之所以能影响手机端，本质上是因为它让 CSS 具备了“感知环境”的能力。
+在网页加载时，浏览器不仅会下载 HTML 和 CSS，还会探测当前运行环境（设备）的特征。
+@media 就是 CSS 用来根据这些特征决定“是否执行某段样式”的逻辑判断语句。 */
+        /* 当你在电脑浏览器上缩小窗口，或者在手机上打开页面时，浏览器会实时计算当前显示区域的宽度。
+一旦宽度数值落入你定义的区间（例如小于 600px），浏览器会立即激活该代码块中的 CSS 规则，覆盖掉之前定义的通用样式。 */
+        /* @media 能发挥作用，离不开你在 <head> 中设置的 <meta name="viewport" ...>。 */
+        /* 你可以把 @media 理解为 CSS 的 if 语句：
+条件：如果设备是手机（屏幕窄）。
+动作：执行针对移动端优化的布局调整。 */
+        @media (max-width: 600px) {
+            body {
+                margin: 0;
+                /* 去掉左右留白 */
+            }
+
+            .container {
+                max-width: 100%;
+                /* 宽度撑满 */
+                border-radius: 0;
+                /* 在手机上去掉圆角，看起来更像原生APP */
+                box-shadow: none;
+                /* 去掉阴影，减少视觉干扰 */
+                min-height: 100vh;
+                /* 确保背景色铺满全屏 */
+            }
+        }
+
         h2 {
             border-bottom: 2px solid #2ecc71;
             padding-bottom: 10px;
@@ -36,8 +76,14 @@
 
         .item {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
+
+            /* justify-content: space-between;
+            align-items: center; */
+            /* 核心修改：改为纵向排列 */
+            flex-direction: column;
+            /* 让内容从左侧对齐 */
+            align-items: flex-start;
+
             padding: 12px;
             margin: 8px 0;
             background: #fafafa;
@@ -103,7 +149,7 @@
 
         <div class="header"
             style="display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; background: #fff; border-bottom: 1px solid #eee;">
-            <h2 style="margin: 0;">📋 我的待办事项清单</h2>
+            <h2 style="margin: 0;">📋 检查清单</h2>
 
             <button @click="logout"
                 style="background: #e74c3c; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 14px;">
@@ -135,7 +181,7 @@
             <div v-else v-for="item in filteredTodoList" :key="item.id" class="item"
                 :class="{ completed: item.isCompleted === 1, updating: item.isUpdating }">
 
-                <div style="display: flex; align-items: center; flex: 1;">
+                <div style="display: flex; align-items: center; width: 100%;">
                     <input type="checkbox" class="todo-checkbox" v-model="item.isCompleted" :true-value="1"
                         :false-value="0" @change="handleStatusToggle(item)" />
 
@@ -144,7 +190,7 @@
                     </span>
                 </div>
 
-                <div style="margin-left: auto; display: flex; gap: 10px;">
+                <div style="display: flex; gap: 10px;width: 100%; margin-top: 8px; justify-content: flex-end;">
 
                     <div class="time-selector">
 
