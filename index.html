@@ -140,6 +140,11 @@
             pointer-events: auto;
             /* 显式开启鼠标事件 */
         }
+
+        #todo-list {
+            padding-bottom: 100px;
+            /* <!-- 底部空白占位符，防止手机底栏遮挡 --> */
+        }
     </style>
 </head>
 
@@ -149,9 +154,9 @@
 
         <div class="header"
             style="display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; background: #fff; border-bottom: 1px solid #eee;">
-            <h2 style="margin: 0;">📋 检查清单</h2>
+            <h2 @click="loadTodos" style="margin: 0; cursor: pointer;">📋 检查清单</h2>
 
-            <button @click="logout"
+            <button @click=" logout"
                 style="background: #e74c3c; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 14px;">
                 退出登录
             </button>
@@ -230,6 +235,9 @@
                     {{ filteredTodoList.some(i => i.isCompleted === 0) ? '全选已完成' : '全部重置' }}
                 </button>
             </div>
+
+            <!-- 底部空白占位符，防止手机底栏遮挡 -->
+            <div style="height: 100px;"></div>
 
         </div>
 
@@ -558,18 +566,19 @@
 
                 // 🗑️ 删除任务 (DELETE)
                 const deleteTodo = async (id) => {
-                    if (confirm('确定要斩断这条任务的因果（删除）吗？')) {
-                        try {
-                            const response = await request.delete(`/item/delete/${id}`);
-                            if (response.data.code === 200) {
-                                await loadTodos(); // 刷新列表
-                            } else {
-                                alert(response.data.message);
-                            }
-                        } catch (err) {
-                            console.error(err);
+                    // if (confirm('确定要斩断这条任务的因果（删除）吗？')) {
+                    try {
+                        const response = await request.delete(`/item/delete/${id}`);
+                        if (response.data.code === 200) {
+                            await loadTodos(); // 刷新列表
+                        } else {
+                            alert("删除失败: " + response.data.message);
                         }
+                    } catch (err) {
+                        console.error(err);
+                        alert("网络请求失败，请稍后再试");
                     }
+                    // }
                 };
 
                 // 时间选择器选项生成（每半小时一个选项）
@@ -739,6 +748,7 @@
                     loading,
                     categories,
                     activeCategory,
+                    loadTodos,
                     addTodo,
                     handleStatusToggle,
                     toggleAllStatus,
