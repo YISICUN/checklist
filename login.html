@@ -69,7 +69,7 @@
 
             <input name="loginPassword" v-model="loginForm.password" type="password" placeholder="密码">
 
-            <button type="submit">登录</button>
+            <button type="submit" :disabled="isLoading">{{ isLoading ? '登录中...' : '登录' }}</button>
         </form>
 
         <p @click="toggleLogin" style="cursor:pointer; color:#3498db; text-align:center; font-size:15px;">
@@ -92,6 +92,7 @@
                     password: ''
                 });
                 const isUsernameLogin = Vue.ref(false); // 默认 ID 登录
+                const isLoading = ref(false); // 💡 新增状态
 
                 const login = async () => {
                     // 根据当前模式选择发送的字段
@@ -102,6 +103,8 @@
                     if (!payload.password || (!payload.id && !payload.username)) {
                         return alert("请填写完整");
                     }
+
+                    isLoading.value = true; // 💡 设置加载状态
 
                     try {
                         const res = await axios.post(`${BASE_URL}/auth/login`, payload);
@@ -135,6 +138,8 @@
                             console.error("代码运行错误:", e);
                             alert("系统异常，请查看控制台日志");
                         }
+                    } finally {
+                        isLoading.value = false; // 💡 无论成功失败，恢复按钮状态
                     }
                 };
 
@@ -170,7 +175,16 @@
                     focusInput();
                 };
 
-                return { loginForm, isUsernameLogin, login, userField, idField, focusInput, toggleLogin };
+                return {
+                    loginForm,
+                    isUsernameLogin,
+                    isLoading,
+                    login,
+                    userField,
+                    idField,
+                    focusInput,
+                    toggleLogin
+                };
             }
         }).mount('#app');
     </script>
