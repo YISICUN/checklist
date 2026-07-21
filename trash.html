@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>回收站</title>
+    <script src="https://unpkg.com/vue@3.5.40/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/axios@1.7.2/dist/axios.min.js"></script>
+    <script src="js/api.js"></script>
+    <link rel="shortcut icon" href="assets/images/favicon.ico" type="image/x-icon">
+    <link rel="icon" sizes="32x32" href="assets/images/favicon.ico">
+
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f4f7f6;
+            margin: 40px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        /* 顶部首行布局：使用 Flex 左右对齐 */
+        .header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #e74c3c;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+
+        h2 {
+            margin: 0;
+            color: #c0392b;
+        }
+
+        button {
+            cursor: pointer;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            color: white;
+        }
+
+        .item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            margin: 8px 0;
+            background: #fafafa;
+            border-radius: 4px;
+            border-left: 4px solid #95a5a6;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="app" class="container">
+
+        <!-- 🚀 首行靠右加一个“恢复删除提示”的按钮 -->
+        <div class="header-row">
+            <h2>🗑️ 回收站</h2>
+            <div style="display: flex; gap: 10px;">
+                <button @click="resetDeleteTip" style="background: #f39c12; font-size: 13px;">
+                    恢复删除提示
+                </button>
+                <button @click="goBack" style="background: #3498db; font-size: 13px;">
+                    返回清单
+                </button>
+            </div>
+        </div>
+
+        <p v-if="loading" style="color: #3498db;">正在加载回收站数据...</p>
+        <p v-else-if="trashList.length === 0" style="color: #7f8c8d;">回收站是空的~</p>
+
+        <div v-else>
+            <div v-for="item in trashList" :key="item.id" class="item">
+                <span>{{ item.title }}</span>
+                <div style="display: flex; gap: 8px;">
+                    <button @click="restoreItem(item.id)" style="background: #2ecc71; padding: 4px 8px;">还原</button>
+                    <button @click="permanentDelete(item.id)"
+                        style="background: #e74c3c; padding: 4px 8px;">彻底删除</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 💡 通用提示框 -->
+        <dialog ref="msgDialog"
+            style="border: none; border-radius: 8px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <form method="dialog" @submit.prevent="msgDialog.close()">
+                <h3 style="margin-top: 0; color: #2c3e50;">提示</h3>
+                <p>{{ dialogMessage }}</p>
+                <div style="text-align: right; margin-top: 15px;">
+                    <button type="submit" style="background: #3498db; padding: 6px 16px;">确定</button>
+                </div>
+            </form>
+        </dialog>
+
+    </div>
+
+    <script>
+        const { createApp, ref, onMounted } = Vue;
+
+        createApp({
+            setup() {
+                const trashList = ref([]);
+                const loading = ref(true);
+                const msgDialog = ref(null);
+                const dialogMessage = ref("");
+
+                const showDialog = (msg) => {
+                    dialogMessage.value = msg;
+                    msgDialog.value.showModal();
+                };
+
+                const request = axios.create({
+                    baseURL: 'https://checklist-backend-bqsf.onrender.com/api'
+                });
+
+                request.interceptors.request.use(config => {
+                    const userId = localStorage.getItem('userId');
+                    if (userId) config.headers['userId'] = userId;
+                    return config;
+                }, error => Promise.reject(error));
+
+                // 加载回收站列表 (视你的后端回收站API路径而定，此处假设为 /item/trash)
+                const loadTrash = async () => {
+                    loading.value = true;
+                    try {
+                        const res = await request.get('/item/trash');
+                        if (res.data.code === 200) {
+                            trashList.value = res.data.data;
+                        }
+                    } catch (err) {
+                        console.error(err);
+                        showDialog("加载回收站失败");
+                    } finally {
+                        loading.value = false;
+                    }
+                };
+
+                // 还原任务
+                const restoreItem = async (id) => {
+                    try {
+                        const res = await request.post(`/item/restore/${id}`);
+                        if (res.data.code === 200) {
+                            loadTrash();
+                        } else {
+                            showDialog("还原失败: " + res.data.message);
+                        }
+                    } catch (err) {
+                        showDialog("操作失败");
+                    }
+                };
+
+                // 彻底删除
+                const permanentDelete = async (id) => {
+                    try {
+                        const res = await request.post(`/item/clean/${id}`);
+                        if (res.data.code === 200) {
+                            loadTrash();
+                        } else {
+                            showDialog("删除失败: " + res.data.message);
+                        }
+                    } catch (err) {
+                        showDialog("操作失败");
+                    }
+                };
+
+                // 💡 核心功能：恢复删除提示（清除不再提示的本地缓存）
+                const resetDeleteTip = () => {
+                    localStorage.removeItem('skip_delete_confirm');
+                    showDialog("已成功恢复！下次删除任务时将重新显示确认提示框。");
+                };
+
+                const goBack = () => {
+                    window.location.href = 'index.html'; // 请根据你的主页面文件名调整
+                };
+
+                onMounted(() => {
+                    if (!localStorage.getItem('userId')) {
+                        window.location.href = 'login.html';
+                        return;
+                    }
+                    loadTrash();
+                });
+
+                return {
+                    trashList,
+                    loading,
+                    msgDialog,
+                    dialogMessage,
+                    showDialog,
+                    restoreItem,
+                    permanentDelete,
+                    resetDeleteTip,
+                    goBack
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+
+</html>

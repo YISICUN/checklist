@@ -3,7 +3,8 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>登录 - 待办事项系统</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录 - 检查清单系统</title>
     <script src="https://unpkg.com/vue@3.5.40/dist/vue.global.js"></script>
     <script src="https://unpkg.com/axios@1.7.2/dist/axios.min.js"></script>
     <script src="js/api.js"></script>
@@ -55,6 +56,23 @@
             cursor: pointer;
             border-radius: 4px;
         }
+
+        /* 新增：Dialog 样式 */
+        dialog {
+            border: none;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        dialog::backdrop {
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        dialog button {
+            margin-top: 15px;
+            background: #3498db;
+        }
     </style>
 </head>
 
@@ -79,10 +97,17 @@
         <div style="margin-top: 15px; text-align: center; font-size: 14px; color: #666;">
             还没有账号？<a href="register.html" style="color: #3498db;">立即注册</a>
         </div>
+
+        <!-- 新增：对话框组件 -->
+        <dialog ref="msgDialog">
+            <p>{{ dialogMessage }}</p>
+            <button @click="$refs.msgDialog.close()">确定</button>
+        </dialog>
+
     </div>
 
     <script>
-        const { createApp, reactive, ref, nextTick, onMounted } = Vue;
+        const { createApp, reactive, ref, onMounted } = Vue;
 
         createApp({
             setup() {
@@ -94,6 +119,14 @@
                 const isUsernameLogin = Vue.ref(false); // 默认 ID 登录
                 const isLoading = ref(false); // 💡 新增状态
 
+                // 💡 新增：对话框相关逻辑
+                const msgDialog = ref(null);
+                const dialogMessage = ref("");
+                const showDialog = (msg) => {
+                    dialogMessage.value = msg;
+                    msgDialog.value.showModal();
+                };
+
                 const login = async () => {
                     // 根据当前模式选择发送的字段
                     const payload = isUsernameLogin.value
@@ -101,7 +134,7 @@
                         : { id: loginForm.id, password: loginForm.password };
 
                     if (!payload.password || (!payload.id && !payload.username)) {
-                        return alert("请填写完整");
+                        return showDialog("请填写完整");
                     }
 
                     isLoading.value = true; // 💡 设置加载状态
@@ -112,7 +145,7 @@
                             localStorage.setItem('userId', res.data.data.id || (isUsernameLogin.value ? loginForm.username : loginForm.id));
                             window.location.href = 'index.html';
                         } else {
-                            alert(res.data.message);
+                            showDialog(res.data.message);
                         }
                     } catch (e) {
                         // 1. 判断是否是 Axios 请求错误（即有响应但非 2xx 状态码）
@@ -121,22 +154,22 @@
 
                             // 2. 根据状态码给予更准确的反馈
                             if (status === 401) {
-                                alert("登录失败: ID 或密码不正确");
+                                showDialog("登录失败: ID 或密码不正确");
                             } else if (status === 404) {
-                                alert("登录失败: 登录接口不存在，请检查后端路径");
+                                showDialog("登录失败: 登录接口不存在，请检查后端路径");
                             } else if (data && data.message) {
                                 // 如果后端返回了标准的错误对象（如 {code: 500, message: "xxx"}）
-                                alert("错误: " + data.message);
+                                showDialog("错误: " + data.message);
                             } else {
-                                alert(`请求错误 (状态码: ${status})`);
+                                showDialog(`请求错误 (状态码: ${status})`);
                             }
                         } else if (e.request) {
                             // 3. 请求发出去了，但没收到响应（可能是网络断了或后端服务崩溃）
-                            alert("无法连接到服务器，请检查网络或后端是否启动");
+                            showDialog("无法连接到服务器，请检查网络或后端是否启动");
                         } else {
                             // 4. 其他代码逻辑错误
                             console.error("代码运行错误:", e);
-                            alert("系统异常，请查看控制台日志");
+                            showDialog("系统异常，请查看控制台日志");
                         }
                     } finally {
                         isLoading.value = false; // 💡 无论成功失败，恢复按钮状态
@@ -183,7 +216,9 @@
                     userField,
                     idField,
                     focusInput,
-                    toggleLogin
+                    toggleLogin,
+                    msgDialog,
+                    dialogMessage
                 };
             }
         }).mount('#app');

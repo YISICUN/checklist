@@ -156,7 +156,7 @@
             style="display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; background: #fff; border-bottom: 1px solid #eee;">
             <h2 @click="loadTodos" style="margin: 0; cursor: pointer;">📋 检查清单</h2>
 
-            <button @click=" logout"
+            <button @click="logout"
                 style="background: #e74c3c; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 14px;">
                 退出登录
             </button>
@@ -230,9 +230,16 @@
                 </div>
             </div>
 
-            <div class="toolbar">
+            <div class="toolbar"
+                style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; width: 100%;">
                 <button @click="toggleAllStatus" style="background: #2ecc71; margin-left: 8px;">
                     {{ filteredTodoList.some(i => i.isCompleted === 0) ? '全选已完成' : '全部重置' }}
+                </button>
+
+                <!-- 右侧新增的回收站按钮 -->
+                <button onclick="window.location.href='trash.html'"
+                    style="background: #95a5a6; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">
+                    🗑️ 回收站
                 </button>
             </div>
 
@@ -241,30 +248,59 @@
 
         </div>
 
-        <dialog id="updateDialog" style="border: 1px solid #ccc; border-radius: 8px; padding: 20px;">
-            <form method="dialog">
+        <!-- 💬 修改任务内容和分类的对话框 -->
+        <dialog ref="updateDialog"
+            style="border: none; border-radius: 8px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <form method="dialog" @submit.prevent="saveUpdate">
                 <h3>修改任务</h3>
-                <p>内容: <input id="newTitleInput" type="text" /></p>
+                <p>内容: <input v-model="tempTitle" type="text" style="width: 100%; padding: 5px;" /></p>
                 <p>分类:
-                    <select id="newCategorySelect">
-                        <option v-for="cat in categories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
+                    <select v-model="tempCatId" style="width: 100%; padding: 5px;">
+                        <option v-for="cat in dbCategories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
                     </select>
                 </p>
-                <div style="text-align: right;">
-                    <button @click="saveUpdate">确认修改</button>
-                    <button>取消</button>
+                <div style="text-align: right; margin-top: 15px;">
+                    <button type="submit" style="background: #3498db; color: white;">确认修改</button>
+                    <button type="button" onclick="this.closest('dialog').close()"
+                        style="background: #95a5a6; color: white; margin-left: 10px;">取消</button>
                 </div>
             </form>
         </dialog>
 
-        <dialog ref="dateDialog" style="border: 1px solid #ccc; border-radius: 8px; padding: 20px;">
-            <form method="dialog">
-                <h3>修改任务截止日期</h3>
+        <!-- 日期修改对话框 -->
+        <dialog ref="dateDialog" style="border: none; border-radius: 8px; padding: 20px;">
+            <form method="dialog" @submit.prevent="confirmDateUpdate">
+                <h3>修改截止日期</h3>
                 <p>输入日期 (YYYY-MM-DD):</p>
-                <input v-model="tempDate" type="text" placeholder="2026-07-15" />
+                <input v-model="tempDate" type="date" style="width: 100%; padding: 5px;" />
                 <div style="margin-top: 15px; text-align: right;">
-                    <button @click="confirmDateUpdate">OK</button>
-                    <button>Cancel</button>
+                    <button type="submit" style="background: #2ecc71; color: white;">确认</button>
+                    <button type="button" onclick="this.closest('dialog').close()"
+                        style="margin-left: 10px;">取消</button>
+                </div>
+            </form>
+        </dialog>
+
+        <!-- 💡 通用消息提示与确认对话框 (支持确认/取消双按钮及“下次不再提示”) -->
+        <dialog ref="msgDialog"
+            style="border: none; border-radius: 8px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); min-width: 250px;">
+            <form method="dialog" @submit.prevent="handleDialogConfirm">
+                <h3 style="margin-top: 0; color: #2c3e50;">提示</h3>
+                <p>{{ dialogMessage }}</p>
+
+                <!-- 💡 新增：动态显示“下次不再提示”的复选框 -->
+                <div v-if="isConfirmMode && showDontAskAgain" style="margin-top: 12px; font-size: 14px; color: #666;">
+                    <label style="cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                        <input type="checkbox" v-model="dontAskAgainChecked"
+                            style="width: 16px; height: 16px; cursor: pointer;" />
+                        下次不再提示
+                    </label>
+                </div>
+
+                <div style="text-align: right; margin-top: 15px;">
+                    <button v-if="isConfirmMode" type="button" @click="handleDialogCancel"
+                        style="background: #95a5a6; color: white; padding: 6px 16px; margin-right: 8px;">取消</button>
+                    <button type="submit" style="background: #3498db; color: white; padding: 6px 16px;">确定</button>
                 </div>
             </form>
         </dialog>
@@ -281,9 +317,68 @@
         createApp({
             setup() {
                 // 定义响应式状态
-                const todoList = ref([]);
-                const newTodoTitle = ref('');
+                const dateDialog = ref(null); // 对应 <dialog ref="dateDialog">
                 const loading = ref(true);
+                const newTodoTitle = ref('');
+                const tempCatId = ref(0);
+                const tempDate = ref(''); // 利用现有的 ref 机制绑定 dialog 输入框
+                const tempTitle = ref('');
+                const todoList = ref([]);
+                const updateDialog = ref(null);
+                let editingItem = null;
+
+                // 💡 对话框逻辑相关的响应式变量
+                const msgDialog = ref(null);
+                const dialogMessage = ref("");
+                const isConfirmMode = ref(false);
+                const showDontAskAgain = ref(false);       // 控制是否显示“下次不再提示”
+                const dontAskAgainChecked = ref(false);    // 记录勾选框状态
+                let dialogResolve = null;
+                let currentConfirmKey = null;              // 用于标识当前是哪个操作触发的确认（如删除）
+
+                // 普通提示框 (替代原 alert)
+                const showDialog = (msg) => {
+                    isConfirmMode.value = false;
+                    showDontAskAgain.value = false;
+                    dialogMessage.value = msg;
+                    msgDialog.value.showModal();
+                };
+
+                // 确认交互框 (替代原 confirm，返回 Promise<boolean>)
+                const showConfirm = (msg, options = {}) => {
+                    isConfirmMode.value = true;
+                    showDontAskAgain.value = !!options.showDontAskAgain;
+                    currentConfirmKey = options.key || null;
+                    dontAskAgainChecked.value = false;
+
+                    dialogMessage.value = msg;
+                    msgDialog.value.showModal();
+                    return new Promise((resolve) => {
+                        dialogResolve = resolve;
+                    });
+                };
+
+                // 对话框“确定”按钮点击
+                const handleDialogConfirm = () => {
+                    msgDialog.value.close();
+                    if (currentConfirmKey && dontAskAgainChecked.value) {
+                        // 如果用户勾选了“下次不再提示”，将其存入 localStorage
+                        localStorage.setItem(currentConfirmKey, 'true');
+                    }
+                    if (dialogResolve) {
+                        dialogResolve(true);
+                        dialogResolve = null;
+                    }
+                };
+
+                // 对话框“取消”按钮点击
+                const handleDialogCancel = () => {
+                    msgDialog.value.close();
+                    if (dialogResolve) {
+                        dialogResolve(false);
+                        dialogResolve = null;
+                    }
+                };
 
                 // 在 setup() 中定义分类
                 // 1. 响应式存储后端分类
@@ -343,11 +438,11 @@
 
                             });
                         } else {
-                            alert('数据加载失败：' + response.data.message);
+                            showDialog('数据加载失败：' + response.data.message);
                         }
                     } catch (err) {
                         console.error(err);
-                        alert('无法连接到后端服务，请确认后端已启动！');
+                        showDialog('无法连接到后端服务，请确认后端已启动！');
                     } finally {
                         loading.value = false;
                     }
@@ -355,7 +450,7 @@
 
                 // 💡 添加任务 (POST)
                 const addTodo = async () => {
-                    if (!newTodoTitle.value) return alert('任务名不能为空！');
+                    if (!newTodoTitle.value) return showDialog('任务名不能为空！');
                     // 1. 获取当前选中的分类 ID
                     let targetCategoryId = activeCategory.value.id;
 
@@ -374,7 +469,7 @@
                             newTodoTitle.value = ''; // 清空输入框
                             await loadTodos();       // 刷新列表
                         } else {
-                            alert('添加失败: ' + response.data.message);
+                            showDialog('添加失败: ' + response.data.message);
                         }
                     } catch (err) {
                         console.error(err);
@@ -382,10 +477,10 @@
                 };
 
                 // 🔄 关键：Checkbox 状态触发变更 (POST/PUT)
-                // 对应你之前提及的前后端数据模型转换逻辑
+                // 对应前后端数据模型转换逻辑
                 const handleStatusToggle = async (item) => {
                     try {
-                        // 依据你的后端实现，这里将整条 item（包含最新的 isCompleted 数字）传给后端
+                        // 依据后端实现，这里将整条 item（包含最新的 isCompleted 数字）传给后端
                         const response = await request.post('/item/update', {
                             id: item.id,
                             title: item.title,
@@ -393,7 +488,7 @@
                         });
 
                         if (response.data.code !== 200) {
-                            alert('状态更新失败: ' + response.data.message);
+                            showDialog('状态更新失败: ' + response.data.message);
                             // 冗余安全设计（回滚）：后端若失败，前端状态倒腾回去
                             item.isCompleted = item.isCompleted === 1 ? 0 : 1;
                         }
@@ -430,11 +525,11 @@
                             });
                         } else {
                             // 错误处理
-                            alert('批量更新失败: ' + response.data.message);
+                            showDialog('批量更新失败: ' + response.data.message);
                         }
                     } catch (err) {
                         console.error("网络请求异常:", err);
-                        alert("网络波动，请检查连接");
+                        showDialog("网络波动，请检查连接");
                     }
                 };
 
@@ -454,7 +549,7 @@
                         if (response.data.code === 200) {
                             await loadTodos(); // 刷新列表
                         } else {
-                            alert('修改失败: ' + response.data.message);
+                            showDialog('修改失败: ' + response.data.message);
                         }
                     } catch (err) {
                         console.error(err);
@@ -462,32 +557,42 @@
                 };
 
                 // 💬 修改任务内容和分类的对话框
-                // 1. 打开对话框（绑定在你的“改”按钮上）
                 const openUpdateDialog = (item) => {
-                    const dialog = document.getElementById('updateDialog');
-                    // 预填充当前值
-                    document.getElementById('newTitleInput').value = item.title;
-                    document.getElementById('newCategorySelect').value = item.categoryId;
-
-                    // 暂存当前要修改的 item 对象
-                    window.currentItem = item;
-                    dialog.showModal();
+                    editingItem = item;
+                    tempTitle.value = item.title;
+                    tempCatId.value = item.categoryId;
+                    updateDialog.value.showModal();
                 };
 
-                // 2. 保存修改（在对话框里的“确认修改”按钮触发）
+                // 保存修改
                 const saveUpdate = async () => {
-                    const item = window.currentItem;
-                    const newTitle = document.getElementById('newTitleInput').value;
-                    const newCatId = parseInt(document.getElementById('newCategorySelect').value);
+                    if (!tempTitle.value.trim()) return;
+                    try {
+                        await request.post('/item/update', {
+                            ...editingItem,
+                            title: tempTitle.value,
+                            categoryId: tempCatId.value
+                        });
+                        updateDialog.value.close();
+                        await loadTodos();
+                    } catch (err) {
+                        showDialog('修改失败');
+                    }
+                };
 
-                    // 发送 axios.post 更新
-                    await request.post('/item/update', {
-                        id: item.id,
-                        title: newTitle,
-                        categoryId: newCatId,
-                        isCompleted: item.isCompleted
-                    });
-                    await loadTodos();
+                // 💡 修改任务截止日期为今天
+                const updateToday = (item) => {
+                    editingItem = item;
+                    tempDate.value = item.dueDate === '2111-11-11' ? new Date().toISOString().split('T')[0] : item.dueDate;
+                    dateDialog.value.showModal();
+                };
+
+                const confirmDateUpdate = async () => {
+                    if (editingItem) {
+                        editingItem.dueDate = tempDate.value;
+                        await updateDate(editingItem);
+                        dateDialog.value.close();
+                    }
                 };
 
                 // 🗓️ 日期选择器清除事件处理
@@ -496,52 +601,10 @@
                     // console.log("日期选择器触发事件，当前event:", event);
                     console.log("日期选择器触发事件，当前值:", event.target.value);
                     if (event.target.value === '') {
-                        // 自动重置为特殊标记
                         item.dueDate = '2111-11-11';
                         // console.log("用户清除了日期，自动设置为每日标记:", item.dueDate);
                     }
                     updateDate(item);
-                };
-
-                // 💡 修改任务截止日期 (POST)
-                // 添加两个变量，用于临时存储
-                let editingItem = null;
-                const tempDate = ref(''); // 利用现有的 ref 机制绑定 dialog 输入框
-                const dateDialog = ref(null); // 对应 <dialog ref="dateDialog">
-                const updateToday = (item) => {
-                    // 1. 获取当天日期并格式化为 YYYY-MM-DD
-                    const today = new Date();
-                    const year = today.getFullYear();
-                    // getMonth() 从 0 开始，所以要 +1；padStart(2, '0') 保证月和日是两位数
-                    const month = String(today.getMonth() + 1).padStart(2, '0');
-                    const day = String(today.getDate()).padStart(2, '0');
-                    const todayStr = `${year}-${month}-${day}`;
-
-                    // // 2. 使用这个变量
-                    // const newDate = prompt("修改任务截止日期 (格式: YYYY-MM-DD):", todayStr);
-                    // if (newDate === null || newDate.trim() === '') return;
-
-                    // let finalDate = newDate.trim();
-                    // if (finalDate.toLowerCase() === '每日') {
-                    //     finalDate = '2111-11-11'; // 特殊标记为每日
-                    // }
-                    // item.dueDate = finalDate;
-                    // updateDate(item);
-
-                    editingItem = item;
-                    // 设置默认值为今日
-                    tempDate.value = todayStr;
-
-                    // 打开对话框
-                    dateDialog.value.showModal();
-                };
-                // 2. 确认按钮调用的逻辑
-                const confirmDateUpdate = async () => {
-                    if (editingItem) {
-                        editingItem.dueDate = tempDate.value === '每日' ? '2111-11-11' : tempDate.value;
-                        await updateDate(editingItem); // 调用你现有的更新函数
-                        dateDialog.value.close();
-                    }
                 };
 
                 // 💡 修改任务截止日期 (POST)
@@ -557,28 +620,36 @@
                         if (response.data.code === 200) {
                             await loadTodos(); // 刷新列表
                         } else {
-                            alert('修改失败: ' + response.data.message);
+                            showDialog('修改失败: ' + response.data.message);
                         }
                     } catch (err) {
                         console.error(err);
                     }
                 };
 
-                // 🗑️ 删除任务 (DELETE)
+                // 🗑️ 删除任务 (支持“下次不再提示”)
                 const deleteTodo = async (id) => {
-                    // if (confirm('确定要斩断这条任务的因果（删除）吗？')) {
+                    const skipConfirm = localStorage.getItem('skip_delete_confirm') === 'true';
+
+                    if (!skipConfirm) {
+                        const confirmed = await showConfirm('确定删除吗？(将会放入回收站)', {
+                            showDontAskAgain: true,
+                            key: 'skip_delete_confirm'
+                        });
+                        if (!confirmed) return;
+                    }
+
                     try {
-                        const response = await request.delete(`/item/delete/${id}`);
+                        const response = await request.post(`/item/delete/${id}`);
                         if (response.data.code === 200) {
                             await loadTodos(); // 刷新列表
                         } else {
-                            alert("删除失败: " + response.data.message);
+                            showDialog("删除失败: " + response.data.message);
                         }
                     } catch (err) {
                         console.error(err);
-                        alert("网络请求失败，请稍后再试");
+                        showDialog("网络请求失败，请稍后再试");
                     }
-                    // }
                 };
 
                 // 时间选择器选项生成（每半小时一个选项）
@@ -619,7 +690,7 @@
                         await loadTodos();
 
                     } catch (err) {
-                        alert("时间更新失败: " + err.message);
+                        showDialog("时间更新失败: " + err.message);
                     }
                 };
 
@@ -647,9 +718,9 @@
                     } else {
                         // 边界情况提示
                         if (type === 'up' || type === 'top') {
-                            alert("已经是顶部啦，不能再往上移动了！");
+                            showDialog("已经是顶部啦，不能再往上移动了！");
                         } else if (type === 'down' || type === 'bottom') {
-                            alert("已经是底部啦，不能再往下移动了！");
+                            showDialog("已经是底部啦，不能再往下移动了！");
                         }
                         return; // 已在边界或非法操作
                     }
@@ -662,7 +733,7 @@
                         });
                         await loadTodos(); // 重新加载数据刷新列表
                     } catch (e) {
-                        alert("移动失败: " + e.message);
+                        showDialog("移动失败: " + e.message);
                     }
                 };
 
@@ -705,15 +776,17 @@
                     }
                 };
 
-                // 退出登录函数
-                const logout = () => {
-                    if (confirm("确定要退出登录吗？")) {
-                        // 1. 清除本地存储的 userId
-                        localStorage.removeItem('userId');
+                // 退出登录函数 (已将原有 confirm 改为 showConfirm)
+                const logout = async () => {
+                    const confirmed = await showConfirm("确定要退出登录吗？");
+                    if (!confirmed) return;
 
-                        // 2. 跳转回登录页
-                        window.location.href = 'login.html';
-                    }
+                    // 1. 清除本地存储的 userId
+                    localStorage.removeItem('userId');
+
+                    // 2. 跳转回登录页
+                    window.location.href = 'login.html';
+
                 };
 
                 // 强制聚焦输入框函数
@@ -731,8 +804,10 @@
                 onMounted(() => {
                     // 🛡️ 登录校验：如果没找到登录信息，直接重定向
                     if (!localStorage.getItem('userId')) {
-                        alert("请先登录！");
-                        window.location.href = 'login.html';
+                        showDialog("请先登录！");
+                        setTimeout(() => {
+                            window.location.href = 'login.html';
+                        }, 100);
                         return;
                     }
 
@@ -743,31 +818,44 @@
 
                 // 将模版需要使用的变量和函数暴露出去
                 return {
-                    todoList,
-                    newTodoTitle,
-                    loading,
-                    categories,
                     activeCategory,
-                    loadTodos,
                     addTodo,
-                    handleStatusToggle,
-                    toggleAllStatus,
-                    updateTodoTitle,
-                    openUpdateDialog,
-                    saveUpdate,
-                    handleDateClear,
-                    dateDialog,
-                    tempDate,
-                    updateToday,
+                    categories,
                     confirmDateUpdate,
-                    updateDate,
+                    dateDialog,
+                    dbCategories,
                     deleteTodo,
-                    timeOptions,
-                    updateTime,
+                    filteredTodoList,
+                    handleDateClear,
+                    handleStatusToggle,
+                    loadTodos,
+                    loading,
                     logout,
                     moveTask,
-                    filteredTodoList,
-                    focusInput
+                    newTodoTitle,
+                    openUpdateDialog,
+                    saveUpdate,
+                    tempCatId,
+                    tempDate,
+                    tempTitle,
+                    timeOptions,
+                    todoList,
+                    toggleAllStatus,
+                    updateDate,
+                    updateDialog,
+                    updateTime,
+                    updateToday,
+                    updateTodoTitle,
+                    focusInput,
+                    msgDialog,
+                    dialogMessage,
+                    showDialog,
+                    showConfirm,
+                    isConfirmMode,
+                    showDontAskAgain,
+                    dontAskAgainChecked,
+                    handleDialogConfirm,
+                    handleDialogCancel
                 };
             }
         }).mount('#app'); // 挂载容器
