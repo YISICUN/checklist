@@ -1,0 +1,165 @@
+ /* css/style.css */
+
+ /* style.css 全局基础样式 */
+ [v-cloak] {
+     display: none;
+ }
+
+ * {
+     box-sizing: border-box;
+     margin: 0;
+     padding: 0;
+ }
+
+ body {
+     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+     background: #f4f7f6;
+
+     /* 默认电脑端留白 */
+     margin: 40px;
+
+     color: #333;
+ }
+
+ .container {
+     max-width: 600px;
+     margin: 0 auto;
+     background: white;
+     padding: 20px;
+     border-radius: 8px;
+     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+ }
+
+ /* --- 新增：手机端适配 --- */
+ /* @media（媒体查询）之所以能影响手机端，本质上是因为它让 CSS 具备了“感知环境”的能力。
+在网页加载时，浏览器不仅会下载 HTML 和 CSS，还会探测当前运行环境（设备）的特征。
+@media 就是 CSS 用来根据这些特征决定“是否执行某段样式”的逻辑判断语句。 */
+ /* 当你在电脑浏览器上缩小窗口，或者在手机上打开页面时，浏览器会实时计算当前显示区域的宽度。
+一旦宽度数值落入你定义的区间（例如小于 600px），浏览器会立即激活该代码块中的 CSS 规则，覆盖掉之前定义的通用样式。 */
+ /* @media 能发挥作用，离不开你在 <head> 中设置的 <meta name="viewport" ...>。 */
+ /* 你可以把 @media 理解为 CSS 的 if 语句：
+条件：如果设备是手机（屏幕窄）。
+动作：执行针对移动端优化的布局调整。 */
+ @media (max-width: 600px) {
+     body {
+         margin: 0;
+         /* 去掉左右留白 */
+     }
+
+     .container {
+         max-width: 100%;
+         /* 宽度撑满 */
+         border-radius: 0;
+         /* 在手机上去掉圆角，看起来更像原生APP */
+         box-shadow: none;
+         /* 去掉阴影，减少视觉干扰 */
+         min-height: 100vh;
+         /* 确保背景色铺满全屏 */
+     }
+ }
+
+
+ .header-row {
+     display: flex;
+     justify-content: space-between;
+     align-items: center;
+     padding: 15px 20px;
+     background: #fff;
+     border-bottom: 1px solid #eee;
+ }
+
+ h2 {
+     border-bottom: 2px solid #3498db;
+     padding-bottom: 10px;
+     color: #2c3e50;
+ }
+
+ .item {
+     display: flex;
+
+     /* justify-content: space-between;
+  align-items: center; */
+     /* 核心修改：改为纵向排列 */
+     flex-direction: column;
+     /* 让内容从左侧对齐 */
+     align-items: flex-start;
+
+     padding: 12px;
+     margin: 8px 0;
+     background: #fafafa;
+     border-radius: 4px;
+     border-left: 4px solid #3498db;
+     transition: all 0.3s ease;
+     /* 增加平滑过渡效果 */
+ }
+
+ /* 状态为已完成时的卡片样式 */
+ .completed {
+     border-left-color: #bdc3c7;
+     background: #f0f0f0;
+ }
+
+ /* 状态为已完成时的文字删除线 */
+ .completed .title {
+     text-decoration: line-through;
+     color: #7f8c8d;
+ }
+
+ button {
+     background: #e74c3c;
+     color: white;
+     border: none;
+     padding: 6px 12px;
+     border-radius: 4px;
+     cursor: pointer;
+ }
+
+ button:hover {
+     background: #c0392b;
+ }
+
+ /* 复选框样式微调 */
+ .todo-checkbox {
+     width: 18px;
+     height: 18px;
+     cursor: pointer;
+     margin-right: 12px;
+ }
+
+ .updating {
+     background-color: #ffe6e6 !important;
+     /* 极淡的红色背景 */
+     border-left: 4px solid #e74c3c !important;
+     /* 醒目的红色左边框 */
+     transition: all 0.5s ease;
+ }
+
+ .daily-label {
+     position: relative;
+     z-index: 10;
+     pointer-events: auto;
+     /* 显式开启鼠标事件 */
+ }
+
+ #todo-list {
+     padding-bottom: 100px;
+     /* <!-- 底部空白占位符，防止手机底栏遮挡 --> */
+ }
+
+ /* 强制让原生 dialog 居中、重置被通配符清掉的影响 */
+ dialog {
+     position: fixed;
+     top: 50%;
+     left: 50%;
+     transform: translate(-50%, -50%);
+     /* 核心：强制通过绝对居中拉回正中央 */
+     border: none;
+     border-radius: 8px;
+     padding: 20px;
+     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+     background: white;
+ }
+
+ dialog::backdrop {
+     background: rgba(0, 0, 0, 0.3);
+ }

@@ -88,11 +88,14 @@
                 // 标记是否处于“注册成功待跳转”状态
                 const isRedirecting = ref(false);
 
+                // 获取全局 api 实例
+                const request = window.api;
+
                 // 在 register.html 中，将请求路径改为后端注册接口
                 const register = async () => {
                     try {
                         // 使用反引号 (backticks) 来拼接 后端基础 API 路径
-                        const res = await axios.post(`${BASE_URL}/auth/register`, {
+                        const res = await request.post('/auth/register', {
                             username: registerForm.username,
                             password: registerForm.password
                         });

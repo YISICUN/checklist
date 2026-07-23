@@ -1,3 +1,5 @@
+<!-- login.html -->
+
 <!DOCTYPE html>
 <html lang="zh-CN">
 
@@ -127,6 +129,9 @@
                     msgDialog.value.showModal();
                 };
 
+                // 获取全局 api 实例
+                const request = window.api;
+
                 const login = async () => {
                     // 根据当前模式选择发送的字段
                     const payload = isUsernameLogin.value
@@ -140,7 +145,7 @@
                     isLoading.value = true; // 💡 设置加载状态
 
                     try {
-                        const res = await axios.post(`${BASE_URL}/auth/login`, payload);
+                        const res = await request.post('/auth/login', payload);
                         if (res.data.code === 200) {
                             localStorage.setItem('userId', res.data.data.id || (isUsernameLogin.value ? loginForm.username : loginForm.id));
                             window.location.href = 'index.html';

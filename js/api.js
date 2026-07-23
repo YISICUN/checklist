@@ -14,7 +14,7 @@ api.interceptors.request.use(config => {
     const userId = localStorage.getItem('userId');
     if (userId) {
         // 携带用户身份
-        config.headers['X-User-ID'] = userId;
+        config.headers['userId'] = userId;
     }
     return config;
 }, error => {
