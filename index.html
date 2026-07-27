@@ -17,11 +17,11 @@
     <title>检查清单 (Vue3 响应式版)</title>
 
     <!-- 引入外部样式文件 -->
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="./css/style.css">
 
-    <link rel="manifest" href="manifest.json">
-    <link rel="shortcut icon" href="assets/images/favicon.ico" type="image/x-icon">
-    <link rel="icon" sizes="32x32" href="assets/images/favicon.ico">
+    <link rel="manifest" href="./manifest.json">
+    <link rel="shortcut icon" href="./assets/images/favicon.ico" type="image/x-icon">
+    <link rel="icon" sizes="32x32" href="./assets/images/favicon.ico">
 </head>
 
 <body>
@@ -29,93 +29,90 @@
     <div id="app" class="container">
 
         <div class="header-row">
-            <h2 @click="loadTodos" style="margin: 0; cursor: pointer;">📋 检查清单</h2>
+            <h2 @click="loadTodos" class="app-title-style">📋 检查清单</h2>
 
-            <button @click="logout"
-                style="background: #e74c3c; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; ">
+            <!-- 💡 账号切换下拉框 -->
+            <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="font-size: 13px; color: #666;">切换账号:</span>
+                <select v-model="currentUserId" @change="handleUserSwitch" class="time-select-style"
+                    style="padding: 4px 8px;">
+                    <option v-for="id in allDiscoveredUserIds" :key="id" :value="id">
+                        ID: {{ id }} {{ id === currentUserId ? '(当前)' : '' }}
+                    </option>
+                </select>
+            </div>
+
+            <button @click="logout" class="logout-btn-style">
                 退出登录
             </button>
         </div>
 
-        <div class="category-tabs"
-            style="display: flex; gap: 20px; margin-bottom: 20px; border-bottom: 2px solid #e0e0e0; padding-bottom: 10px;">
-            <div v-for="cat in categories" :key="cat.id" @click="activeCategory = cat" :style="{ 
-            cursor: 'pointer', 
-            fontWeight: activeCategory.id === cat.id ? 'bold' : 'normal',
-            color: activeCategory.id === cat.id ? '#3498db' : '#7f8c8d',
-            borderBottom: activeCategory.id === cat.id ? '2px solid #3498db' : 'none'}">
+        <div class="category-tabs">
+            <div v-for="cat in categories" :key="cat.id" @click="activeCategory = cat" class="category-item-base"
+                :class="{ 'category-item-active': activeCategory.id === cat.id, 'category-item-normal': activeCategory.id !== cat.id }">
                 {{ cat.name }}
             </div>
         </div>
 
         <!-- 🔍 带有清空按钮的白底搜索区域 -->
-        <div style="position: relative; margin-bottom: 12px;">
-            <input type="text" v-model.trim="searchKeyword" placeholder="🔍 搜索任务..."
-                style="padding: 8px 32px 8px 12px; width: 100%; box-sizing: border-box; font-size: inherit; border: 1px solid #cbd5e1; border-radius: 6px; background: #ffffff; color: #1e293b;">
+        <div class="search-box-wrapper">
+            <input type="text" v-model.trim="searchKeyword" placeholder="🔍 搜索任务..." class="search-input-style">
 
             <!-- ❌ 一键清空按钮：输入文字时显示 -->
-            <span v-if="searchKeyword" @click="searchKeyword = ''"
-                style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #64748b; font-size: 16px; padding: 0 4px;">
+            <span v-if="searchKeyword" @click="searchKeyword = ''" class="clear-btn-style">
                 ✕
             </span>
+
         </div>
 
         <!-- ➕ 带有清空按钮的添加任务表单 -->
-        <div style="display: flex; align-items: center; margin-bottom: 20px;">
+        <div class="add-form-wrapper">
             <!-- 输入框包裹容器（相对定位，用于放置清空按钮） -->
-            <div style="position: relative; width: 70%;">
+            <div class="input-container-style">
                 <input type="text" v-model.trim="newTodoTitle" @keyup.enter="addTodo" placeholder="✚ 输入新任务..."
-                    style="padding: 8px 32px 8px 12px; width: 100%; box-sizing: border-box; font-size: inherit; border: 1px solid #cbd5e1; border-radius: 6px; background: #ffffff; color: #1e293b;">
+                    class="search-input-style">
 
                 <!-- ❌ 一键清空输入内容按钮：有文字时显示 -->
-                <span v-if="newTodoTitle" @click="newTodoTitle = ''"
-                    style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #64748b; font-size: 16px; padding: 0 4px;">
+                <span v-if="newTodoTitle" @click="newTodoTitle = ''" class="clear-btn-style">
                     ✕
                 </span>
+
             </div>
 
             <!-- 添加按钮 -->
-            <button @click="addTodo"
-                style="background: #3498db; color: #ffffff; border: none; border-radius: 6px; padding: 8px 16px; margin-left: 8px; cursor: pointer; font-size: inherit;">添加任务</button>
+            <button @click="addTodo" class="add-task-btn-style">添加任务</button>
         </div>
 
         <div id="todo-list">
-            <p v-if="loading" style="color: #3498db;">正在加载云端数据...</p>
+            <p v-if="loading" class="loading-tip-style">正在加载云端数据...</p>
 
-            <p v-else-if="filteredTodoList.length === 0" style="color: #7f8c8d;">目前没有任务，快去添加一个吧！</p>
+            <p v-else-if="filteredTodoList.length === 0" class="empty-tip-style">目前没有任务，快去添加一个吧！</p>
             <div v-else v-for="item in filteredTodoList" :key="item.id" class="item"
                 :class="{ completed: item.isCompleted === 1, updating: item.isUpdating }">
 
-                <div style="display: flex; align-items: center; width: 100%;">
+                <div class="item-inner-row">
                     <input type="checkbox" class="todo-checkbox" v-model="item.isCompleted" :true-value="1"
                         :false-value="0" @change="handleStatusToggle(item)" />
 
-                    <span class="title" @click="updateTodoTitle(item)" style="cursor:pointer; flex: 1;">
+                    <span class="title" @click="updateTodoTitle(item)" class="item-title-style">
                         <strong>{{ item.title }}</strong>
                     </span>
                 </div>
 
-                <div style="display: flex; gap: 10px;width: 100%; margin-top: 8px; justify-content: flex-end;">
+                <div class="item-actions-row">
 
                     <div class="time-selector">
 
                         <span v-if="item.dueDate === '2111-11-11'" class="daily-label">
-                            <button type="button" @click.stop="updateToday(item)" style="cursor:pointer; 
-                                border:none; 
-                                background:transparent; 
-                                padding:0; 
-                                margin:0; 
-                                font-size: inherit; 
-                                color: inherit; 
-                                text-decoration: underline;">
+                            <button type="button" @click.stop="updateToday(item)" class="daily-btn-style">
                                 每日
                             </button>
                         </span>
 
                         <!-- <input v-else type="date" v-model="item.dueDate" @change="updateTime(item)" -->
                         <input v-else type="date" v-model="item.dueDate" @input="handleDateClear($event, item)"
-                            style="padding: 4px; border: 1px solid #ccc; border-radius: 4px;" />
-                        <select v-model="item.startTime" @change="updateTime(item)" style="padding: 4px;">
+                            class="date-input-style" />
+                        <select v-model="item.startTime" @change="updateTime(item)" class="time-select-style">
                             <option v-for="time in timeOptions" :key="time" :value="time">{{ time }}</option>
                         </select>
                     </div>
@@ -125,83 +122,86 @@
                     <!-- <button @click="moveTask(item, 'down')" style="background: #3498db; padding: 2px 6px;">↓</button> -->
                     <!-- <button @click="moveTask(item, 'bottom')" style="background: #3498db; padding: 2px 6px;">置底</button> -->
 
-                    <button @click="openUpdateDialog(item)" style="background: #3498db; padding: 2px 6px;">改</button>
-                    <button @click="deleteTodo(item.id)" style="background: #e74c3c; padding: 2px 6px;">删</button>
+                    <button @click="openUpdateDialog(item)" class="action-btn-blue">改</button>
+                    <button @click="deleteTodo(item.id)" class="action-btn-red">删</button>
                 </div>
             </div>
 
-            <div class="toolbar"
-                style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; width: 100%;">
-                <button @click="toggleAllStatus" style="background: #3498db; margin-left: 8px;">
+            <div class="toolbar">
+                <button @click="toggleAllStatus" class="toolbar-btn-style">
                     {{ filteredTodoList.some(i => i.isCompleted === 0) ? '全选已完成' : '全部重置' }}
                 </button>
 
+                <!-- 💡 新增：数据导出与导入按钮（隐藏的 file input 用于选择导入文件） -->
+                <button @click="exportLocalStorage" class="toolbar-btn-style" style="background: #27ae60;">
+                    📥 导出数据
+                </button>
+                <button @click="triggerImport" class="toolbar-btn-style" style="background: #e67e22;">
+                    📤 导入数据
+                </button>
+                <input type="file" ref="fileInput" @change="importLocalStorage" accept=".json" style="display: none;" />
+
                 <!-- 右侧新增的回收站按钮 -->
-                <button onclick="window.location.href='trash.html'"
-                    style="background: #3498db; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">
+                <button onclick="window.location.href='trash.html'" class="trash-btn-style">
                     🗑️ 回收站
                 </button>
             </div>
 
             <!-- 底部空白占位符，防止手机底栏遮挡 -->
-            <div style="height: 100px;"></div>
+            <div class="spacer-style"></div>
 
         </div>
 
         <!-- 💬 修改任务内容和分类的对话框 -->
-        <dialog ref="updateDialog"
-            style="border: none; border-radius: 8px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+        <dialog ref="updateDialog" class="dialog-base-style">
             <form method="dialog" @submit.prevent="saveUpdate">
                 <h3>修改任务</h3>
-                <p>内容: <input v-model="tempTitle" type="text" style="width: 100%; padding: 5px;" /></p>
-                <p>描述: <input v-model="tempDesc" style="width: 100%; padding: 5px;" /></p>
+                <p>内容: <input v-model="tempTitle" type="text" class="dialog-input-style" /></p>
+                <p>描述: <input v-model="tempDesc" class="dialog-input-style" /></p>
                 <p>分类:
-                    <select v-model="tempCatId" style="width: 100%; padding: 5px;">
+                    <select v-model="tempCatId" class="dialog-input-style">
                         <option v-for="cat in dbCategories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
                     </select>
                 </p>
-                <div style="text-align: right; margin-top: 15px;">
-                    <button type="submit" style="background: #3498db; color: white;">确认修改</button>
-                    <button type="button" onclick="this.closest('dialog').close()"
-                        style="background: #3498db; color: white; margin-left: 10px;">取消</button>
+                <div class="dialog-footer-style">
+                    <button type="submit" class="dialog-submit-btn">确认修改</button>
+                    <button type="button" onclick="this.closest('dialog').close()" class="dialog-cancel-btn">取消</button>
                 </div>
             </form>
         </dialog>
 
         <!-- 日期修改对话框 -->
-        <dialog ref="dateDialog" style="border: none; border-radius: 8px; padding: 20px;">
+        <dialog ref="dateDialog" class="dialog-base-style">
             <form method="dialog" @submit.prevent="confirmDateUpdate">
                 <h3>修改截止日期</h3>
                 <p>输入日期 (YYYY-MM-DD):</p>
-                <input v-model="tempDate" type="date" style="width: 100%; padding: 5px;" />
-                <div style="margin-top: 15px; text-align: right;">
-                    <button type="submit" style="background: #3498db; color: white;">确认</button>
+                <input v-model="tempDate" type="date" class="dialog-input-style" />
+                <div class="dialog-footer-style">
+                    <button type="submit" class="dialog-submit-btn">确认</button>
                     <button type="button" onclick="this.closest('dialog').close()"
-                        style="background: #3498db; color: white;margin-left: 10px;">取消</button>
+                        class="dialog-cancel-btn-ml">取消</button>
                 </div>
             </form>
         </dialog>
 
         <!-- 💡 通用消息提示与确认对话框 (支持确认/取消双按钮及“下次不再提示”) -->
-        <dialog ref="msgDialog"
-            style="border: none; border-radius: 8px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); min-width: 250px;">
+        <dialog ref="msgDialog" class="msg-dialog-style">
             <form method="dialog" @submit.prevent="handleDialogConfirm">
-                <h3 style="margin-top: 0; color: #2c3e50;">提示</h3>
+                <h3 class="msg-title-style">提示</h3>
                 <p>{{ dialogMessage }}</p>
 
                 <!-- 💡 新增：动态显示“下次不再提示”的复选框 -->
-                <div v-if="isConfirmMode && showDontAskAgain" style="margin-top: 12px; font-size: 13px; color: #666;">
-                    <label style="cursor: pointer; display: flex; align-items: center; gap: 6px;">
-                        <input type="checkbox" v-model="dontAskAgainChecked"
-                            style="width: 16px; height: 16px; cursor: pointer;" />
+                <div v-if="isConfirmMode && showDontAskAgain" class="dont-ask-wrapper">
+                    <label class="dont-ask-label">
+                        <input type="checkbox" v-model="dontAskAgainChecked" class="dont-ask-checkbox" />
                         下次不再提示
                     </label>
                 </div>
 
-                <div style="text-align: right; margin-top: 15px;">
-                    <button type="submit" style="background: #ff0000; color: white;">确定退出</button>
+                <div class="msg-footer-style">
+                    <button type="submit" class="msg-confirm-btn">确定</button>
                     <button v-if="isConfirmMode" type="button" @click="handleDialogCancel"
-                        style="background: #3498db; color: white; padding: 6px 16px; margin-right: 8px;">取消</button>
+                        class="msg-cancel-btn">取消</button>
                 </div>
             </form>
         </dialog>

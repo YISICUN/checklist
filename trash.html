@@ -7,11 +7,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>回收站</title>
-    <script src="https://unpkg.com/vue@3.5.40/dist/vue.global.js"></script>
-    <script src="https://unpkg.com/axios@1.7.2/dist/axios.min.js"></script>
-    <script src="js/api.js"></script>
-    <link rel="shortcut icon" href="assets/images/favicon.ico" type="image/x-icon">
-    <link rel="icon" sizes="32x32" href="assets/images/favicon.ico">
+    <link rel="shortcut icon" href="./assets/images/favicon.ico" type="image/x-icon">
+    <link rel="icon" sizes="32x32" href="./assets/images/favicon.ico">
 
     <style>
         body {
@@ -74,6 +71,7 @@
         <!-- 🚀 首行靠右加一个“恢复删除提示”的按钮 -->
         <div class="header-row">
             <h2>🗑️ 回收站</h2>
+
             <div style="display: flex; gap: 10px;">
                 <button @click="resetDeleteTip" style="background: #3498db; font-size: 13px;">
                     恢复删除提示
@@ -85,16 +83,20 @@
         </div>
 
         <p v-if="loading" style="color: #3498db;">正在加载回收站数据...</p>
-        <p v-else-if="trashList.length === 0" style="color: #7f8c8d;">回收站是空的~</p>
+        <!-- 💡 视图渲染改用 filteredTrashList 判断和遍历 -->
+        <p v-else-if="filteredTrashList.length === 0" style="color: #7f8c8d;">回收站是空的~</p>
 
         <div v-else>
-            <div v-for="item in trashList" :key="item.id" class="item">
+            <div v-for="item in filteredTrashList" :key="item.id" class="item">
                 <div style="display: flex; gap: 8px;">
                     <button @click="restoreItem(item.id)" style="background: #3498db; padding: 4px 8px;">还原</button>
                 </div>
                 <!-- 中间：title 靠左，margin-right: auto 把右侧空间撑开 -->
                 <span style="margin-right: auto; margin-left: 12px;">{{ item.title }}</span>
-                <div style="display: flex; gap: 8px;">
+
+                <!-- 💡 右侧区域：更新时间 + 彻底删除按钮 -->
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <span style="font-size: 12px; color: #999;">最终更新时间:{{ formatTime(item.updateTime) }}</span>
                     <button @click="permanentDelete(item.id)"
                         style="background: #e74c3c; padding: 4px 8px;">彻底删除</button>
                 </div>
@@ -114,9 +116,12 @@
         </dialog>
 
     </div>
+    <script src="https://unpkg.com/vue@3.5.40/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/axios@1.7.2/dist/axios.min.js"></script>
+    <script src="js/api.js"></script>
 
     <script>
-        const { createApp, ref, onMounted } = Vue;
+        const { createApp, ref, computed, onMounted } = Vue;
 
         createApp({
             setup() {
@@ -130,20 +135,65 @@
                     msgDialog.value.showModal();
                 };
 
+                // 根据当前用户动态生成 Storage Key,针对不同用户使用独立的缓存 Key，避免数据串号
+                const getStorageKey = () => {
+                    const userId = localStorage.getItem('userId') || 'default';
+                    return `todo_list_data_${userId}`;
+                };
+
                 // 把全局挂载的请求工具拿过来，给它起个本地名字叫 request
                 const request = window.api;
 
-                // 加载回收站列表 (视你的后端回收站API路径而定，此处假设为 /item/trash)
+                // 💡 格式化时间函数：将 "2026-07-27T09:20:39" 转换为友好的 "2026-07-27 09:20:39"
+                const formatTime = (timeStr) => {
+                    if (!timeStr) return '';
+                    return timeStr.replace('T', ' ');
+                };
+
+                // 💡 计算属性：根据 deleteFlag 过滤，并按更新时间倒序排序
+                const filteredTrashList = computed(() => {
+                    return trashList.value
+                        .filter(item => Number(item.deleteFlag) !== 0)
+                        .sort((a, b) => {
+                            const timeA = new Date(a.updateTime || 0).getTime();
+                            const timeB = new Date(b.updateTime || 0).getTime();
+                            return timeB - timeA; // 倒序：最新的排在最前面
+                        });
+                });
+
+                // 加载回收站数据：将完整数据存入 trashList，并同步到 localStorage
                 const loadTrash = async () => {
                     loading.value = true;
+                    const storageKey = getStorageKey();
+
                     try {
-                        const res = await request.get('/item/trash');
-                        if (res.data.code === 200) {
-                            trashList.value = res.data.data;
+                        // 1. 优先尝试从后端获取最新的全量数据
+                        const response = await request.get('/item/list');
+                        if (response.data.code === 200) {
+                            trashList.value = response.data.data;
+
+                            // 💡 核心：将全量数据备份到其专属的缓存 Key 中
+                            localStorage.setItem(storageKey, JSON.stringify(trashList.value));
+                        } else {
+                            showDialog("加载回收站失败: " + response.data.message);
                         }
                     } catch (err) {
-                        console.error(err);
-                        showDialog("加载回收站失败");
+                        console.warn("网络请求失败，正在从本地存储读取...", err);
+
+                        // 2. 联网失败时，降级从 localStorage 的 todo_list_data_${userId} 读取全量数据
+                        const localData = localStorage.getItem(storageKey);
+                        if (localData) {
+                            try {
+                                trashList.value = JSON.parse(localData);
+                                showDialog("当前处于离线状态，正在显示本地缓存的数据。");
+                            } catch (parseErr) {
+                                console.error("解析本地数据失败", parseErr);
+                                trashList.value = [];
+                            }
+                        } else {
+                            trashList.value = [];
+                            showDialog("当前无网络连接，且没有该用户的本地缓存数据。");
+                        }
                     } finally {
                         loading.value = false;
                     }
@@ -152,12 +202,16 @@
                 // 还原任务
                 const restoreItem = async (id) => {
                     try {
-                        const res = await request.post(`/item/restore/${id}`);
-                        if (res.data.code === 200) {
-                            loadTrash();
-                        } else {
-                            showDialog("还原失败: " + res.data.message);
+                        const response = await request.post(`/item/restore/${id}`).catch(() => null);
+
+                        const storageKey = getStorageKey();
+                        const target = trashList.value.find(item => item.id === id);
+                        if (target) {
+                            target.deleteFlag = 0;
+                            localStorage.setItem(storageKey, JSON.stringify(trashList.value));
                         }
+
+                        loadTrash();
                     } catch (err) {
                         showDialog("操作失败");
                     }
@@ -166,12 +220,14 @@
                 // 彻底删除
                 const permanentDelete = async (id) => {
                     try {
-                        const res = await request.post(`/item/clean/${id}`);
-                        if (res.data.code === 200) {
-                            loadTrash();
-                        } else {
-                            showDialog("删除失败: " + res.data.message);
-                        }
+                        const response = await request.post(`/item/clean/${id}`).catch(() => null);
+
+                        // 无论后端是否成功，本地缓存也同步更新（直接从总列表中彻底移除该项）
+                        const storageKey = getStorageKey();
+                        trashList.value = trashList.value.filter(item => item.id !== id);
+                        localStorage.setItem(storageKey, JSON.stringify(trashList.value));
+
+                        loadTrash();
                     } catch (err) {
                         showDialog("操作失败");
                     }
@@ -197,10 +253,12 @@
 
                 return {
                     trashList,
+                    filteredTrashList,
                     loading,
                     msgDialog,
                     dialogMessage,
                     showDialog,
+                    formatTime,
                     restoreItem,
                     permanentDelete,
                     resetDeleteTip,
@@ -209,6 +267,7 @@
             }
         }).mount('#app');
     </script>
+
 </body>
 
 </html>

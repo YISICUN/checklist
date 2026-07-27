@@ -5,11 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>注册 - 检查清单系统</title>
-    <script src="https://unpkg.com/vue@3.5.40/dist/vue.global.js"></script>
-    <script src="https://unpkg.com/axios@1.7.2/dist/axios.min.js"></script>
-    <script src="js/api.js"></script>
-    <link rel="shortcut icon" href="assets/images/favicon.ico" type="image/x-icon">
-    <link rel="icon" sizes="32x32" href="assets/images/favicon.ico">
+    <link rel="shortcut icon" href="./assets/images/favicon.ico" type="image/x-icon">
+    <link rel="icon" sizes="32x32" href="./assets/images/favicon.ico">
 
     <style>
         body {
@@ -58,7 +55,7 @@
         </form>
 
         <div style="margin-top: 15px; text-align: center; font-size: 14px; color: #666;">
-            <a href="login.html" style="color: #3498db;">去登录</a>
+            <a href="./login.html" style="color: #3498db;">去登录</a>
         </div>
 
         <!-- 新增：对话框组件 -->
@@ -69,6 +66,10 @@
         </dialog>
 
     </div>
+
+    <script src="https://unpkg.com/vue@3.5.40/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/axios@1.7.2/dist/axios.min.js"></script>
+    <script src="js/api.js"></script>
 
     <script>
         const { createApp, reactive, ref, onMounted } = Vue;
