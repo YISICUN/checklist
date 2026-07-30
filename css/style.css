@@ -106,10 +106,12 @@
  }
 
  button {
-     background: #e74c3c;
+     background: #3498db;
      color: white;
      border: none;
-     padding: 6px 12px;
+     padding: 4px 8px;
+     font-size: 14px;
+     /* 统一文字大小 */
      border-radius: 4px;
      cursor: pointer;
  }
@@ -175,7 +177,7 @@
      background: #e74c3c;
      color: white;
      border: none;
-     padding: 8px 16px;
+     padding: 4px 8px;
      border-radius: 4px;
      cursor: pointer;
  }
@@ -253,8 +255,6 @@
      transform: translateY(-50%);
      cursor: pointer;
      color: #64748b;
-     font-size: 16px;
-     padding: 0 4px;
  }
 
  .add-form-wrapper {
@@ -273,10 +273,9 @@
      color: #ffffff;
      border: none;
      border-radius: 6px;
-     padding: 8px 16px;
+
      margin-left: 8px;
      cursor: pointer;
-     font-size: inherit;
  }
 
  .loading-tip-style {
@@ -312,7 +311,6 @@
      background: transparent;
      padding: 0;
      margin: 0;
-     font-size: inherit;
      color: inherit;
      text-decoration: underline;
  }
@@ -354,7 +352,6 @@
      background: #3498db;
      color: white;
      border: none;
-     padding: 6px 12px;
      border-radius: 4px;
      cursor: pointer;
  }
@@ -453,6 +450,5 @@
  .msg-cancel-btn {
      background: #3498db;
      color: white;
-     padding: 6px 16px;
      margin-right: 8px;
  }

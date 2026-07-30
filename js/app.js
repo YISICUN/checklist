@@ -251,7 +251,7 @@ createApp({
 
                 if (response && response.data.code === 200) {
                     // 先执行一次同步（把之前断网时存的本地数据传上去）
-                    await syncOfflineData();
+                    await syncImportedDataToDB();
 
                     // 然后再正常处理数据并更新视图,之后,watch会自动持久化存入 localStorage，确保删除进回收站时能读取到
                     todoList.value = processItems(response.data.data);
@@ -687,41 +687,41 @@ createApp({
 
         };
 
-        // 🔄 自动同步本地离线未上传的数据
-        const syncOfflineData = async () => {
-            // 1. 检查当前网络是不是通的
-            // 2. 筛选出所有未同步的数据 (isSynced === false)
-            const unsyncedItems = todoList.value.filter(item => item.isSynced === false);
+        // // 🔄 自动同步本地离线未上传的数据
+        // const syncOfflineData = async () => {
+        //     // 1. 检查当前网络是不是通的
+        //     // 2. 筛选出所有未同步的数据 (isSynced === false)
+        //     const unsyncedItems = todoList.value.filter(item => item.isSynced === false);
 
-            if (unsyncedItems.length === 0) return;
+        //     if (unsyncedItems.length === 0) return;
 
-            console.log(`检测到有 ${unsyncedItems.length} 条本地离线数据需要同步...`);
+        //     console.log(`检测到有 ${unsyncedItems.length} 条本地离线数据需要同步...`);
 
-            for (const item of unsyncedItems) {
-                try {
-                    // 发送请求给后端创建
-                    const response = await request.post('/item/add', {
-                        title: item.title,
-                        categoryId: item.categoryId,
-                        isCompleted: item.isCompleted,
-                        dueDate: item.dueDate,
-                        startTime: item.startTime
-                    }).catch(() => null);
+        //     for (const item of unsyncedItems) {
+        //         try {
+        //             // 发送请求给后端创建
+        //             const response = await request.post('/item/add', {
+        //                 title: item.title,
+        //                 categoryId: item.categoryId,
+        //                 isCompleted: item.isCompleted,
+        //                 dueDate: item.dueDate,
+        //                 startTime: item.startTime
+        //             }).catch(() => null);
 
-                    if (response && response.data.code === 200) {
-                        // 同步成功！
-                        console.log(`离线任务 "${item.title}" 同步成功！`);
-                        item.isSynced = true; // 标记为已同步
-                    }
-                } catch (err) {
-                    console.error(`离线任务 "${item.title}" 同步失败:`, err);
-                    // 如果某一条同步失败，可以跳过，等下一次再试
-                    continue;
-                }
-            }
-            // 同步全部完成后刷新列表
-            showDialog("本地离线数据已成功同步至云端！");
-        };
+        //             if (response && response.data.code === 200) {
+        //                 // 同步成功！
+        //                 console.log(`离线任务 "${item.title}" 同步成功！`);
+        //                 item.isSynced = true; // 标记为已同步
+        //             }
+        //         } catch (err) {
+        //             console.error(`离线任务 "${item.title}" 同步失败:`, err);
+        //             // 如果某一条同步失败，可以跳过，等下一次再试
+        //             continue;
+        //         }
+        //     }
+        //     // 同步全部完成后刷新列表
+        //     showDialog("本地离线数据已成功同步至云端！");
+        // };
 
         // 导出 localStorage 数据为 JSON 文件
         const exportLocalStorage = () => {
@@ -775,7 +775,7 @@ createApp({
             }
 
             const reader = new FileReader();
-            reader.onload = (e) => {
+            reader.onload = async (e) => { // 👈 注意这里改成 async
                 try {
                     const rawData = JSON.parse(e.target.result);
 
@@ -802,8 +802,11 @@ createApp({
                     const finalValue = typeof dataToImport === 'string' ? dataToImport : JSON.stringify(dataToImport);
                     localStorage.setItem(storageKey, finalValue);
 
+                    // 💡 核心新增：数据写入 localStorage 后，执行比对并更新进 DB
+                    await syncImportedDataToDB();
+
                     // 数据导入成功,触发刷新
-                    showDialog(`数据导入成功！已成功加载当前账号 (ID: ${currentUserId.value}) 的待办数据。点击确定后将刷新页面。`);
+                    showDialog(`数据导入成功！已成功加载并同步当前账号 (ID: ${currentUserId.value}) 的待办数据。点击确定后将刷新页面。`);
 
                 } catch (error) {
                     console.error("导入解析失败:", error);
@@ -813,6 +816,83 @@ createApp({
                 }
             };
             reader.readAsText(file);
+        };
+
+        // 💡 新增/更新：将 localStorage 中导入的数据与 DB 比对，若不存在则调用 add，若 updateTime 大于 DB 则调用 update
+        const syncImportedDataToDB = async () => {
+            const storageKey = getStorageKey();
+            const localDataStr = localStorage.getItem(storageKey);
+            if (!localDataStr) return;
+
+            let localItems = [];
+            try {
+                localItems = JSON.parse(localDataStr);
+            } catch (e) {
+                console.error("解析本地导入数据失败", e);
+                return;
+            }
+
+            if (!Array.isArray(localItems) || localItems.length === 0) return;
+
+            try {
+                // 1. 获取后端当前的最新数据列表，用于对比
+                const response = await request.get('/item/list').catch(() => null);
+                if (!response || response.data.code !== 200) {
+                    console.error("获取云端数据失败，无法进行比对同步");
+                    return;
+                }
+
+                const dbItems = response.data.data || [];
+                // 将 DB 数据转为以 id 为 key 的 Map，方便快速查找
+                const dbItemMap = new Map();
+                dbItems.forEach(dbItem => {
+                    dbItemMap.set(dbItem.id, dbItem);
+                });
+
+                // 2. 遍历本地导入的数据
+                for (const localItem of localItems) {
+                    const dbItem = dbItemMap.get(localItem.id);
+
+                    if (!dbItem) {
+                        // 💡 情况 A：DB 里没有这条数据，调用添加接口 (add)
+                        console.log(`云端未找到任务 [ID: ${localItem.id}]，正在执行新增插入...`);
+                        await request.post('/item/add', {
+                            title: localItem.title,
+                            categoryId: localItem.categoryId || 1,
+                            isCompleted: localItem.isCompleted || 0,
+                            dueDate: localItem.dueDate || '2111-11-11',
+                            startTime: localItem.startTime || '08:00',
+                            description: localItem.description || ''
+                        }).catch(err => {
+                            console.error(`新增任务 [ID: ${localItem.id}] 到 DB 失败:`, err);
+                        });
+                    } else {
+                        // 💡 情况 B：DB 里存在该条数据，检查 updateTime 是否大于云端
+                        const localUpdateTime = localItem.updateTime ? new Date(localItem.updateTime).getTime() : 0;
+                        const dbUpdateTime = dbItem.update_time || dbItem.updateTime ? new Date(dbItem.update_time || dbItem.updateTime).getTime() : 0;
+
+                        if (localUpdateTime > dbUpdateTime) {
+                            console.log(`本地任务 [ID: ${localItem.id}] 的 updateTime 大于云端，正在更新至 DB...`);
+
+                            // 调用后端更新接口 (update)
+                            await request.post('/item/update', {
+                                id: localItem.id,
+                                title: localItem.title,
+                                isCompleted: localItem.isCompleted,
+                                dueDate: localItem.dueDate,
+                                startTime: localItem.startTime,
+                                categoryId: localItem.categoryId,
+                                description: localItem.description
+                            }).catch(err => {
+                                console.error(`更新任务 [ID: ${localItem.id}] 到 DB 失败:`, err);
+                            });
+                        }
+                    }
+                }
+                console.log("导入数据的云端比对、新增与更新检查已全部完成。");
+            } catch (err) {
+                console.error("同步导入数据到 DB 发生异常:", err);
+            }
         };
 
         // 生命周期钩子：挂载完成时加载数据
@@ -840,50 +920,51 @@ createApp({
             activeCategory,
             addTodo,
             categories,
-            dateDialogSubmit,
+            currentUserId,
             dateDialog,
+            dateDialogCancel,
+            dateDialogSubmit,
             dbCategories,
             deleteTodo,
             dialogMessage,
+            discoveredUserIds,
             dontAskAgainChecked,
+            exportLocalStorage,
+            fileInput,
             filteredTodoList,
             focusInput,
             handleDateClear,
-            msgDialogCancel,
-            msgDialogSubmit,
             handleStatusToggle,
+            handleUserSwitch,
+            importLocalStorage,
             isConfirmMode,
             loadTodos,
             loading,
             logout,
             msgDialog,
+            msgDialogCancel,
+            msgDialogSubmit,
             newTodoTitle,
+            openDateDialog,
             openUpdateDialog,
-            updateDialogSubmit,
             searchKeyword,
             showConfirm,
             showDialog,
             showDontAskAgain,
+            syncImportedDataToDB,
             tempCatId,
-            tempDesc,
             tempDate,
+            tempDesc,
             tempTitle,
             timeOptions,
             todoList,
             toggleAllStatus,
-            updateDialog,
-            updateTime,
-            openDateDialog,
-            updateTodoTitle,
-            exportLocalStorage,
             triggerImport,
-            importLocalStorage,
-            fileInput,
-            currentUserId,
-            discoveredUserIds,
-            handleUserSwitch,
+            updateDialog,
             updateDialogCancel,
-            dateDialogCancel
+            updateDialogSubmit,
+            updateTime,
+            updateTodoTitle
         };
     }
 }).mount('#app'); // 挂载容器

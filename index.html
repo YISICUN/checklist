@@ -29,12 +29,16 @@
 <body>
 
     <div id="app" class="container">
-
-        <div class="header-row">
+        <div class="header-row" style="flex-wrap: wrap;">
             <h2 @click="loadTodos" class="app-title-style">📋 检查清单</h2>
 
-            <!-- 💡 账号切换下拉框 -->
-            <div style="display: flex; align-items: center; gap: 6px;">
+            <button @click="logout" class="logout-btn-style">
+                退出登录
+            </button>
+
+            <!-- 💡 账号切换下拉框（单独换行并靠右） -->
+            <div
+                style="width: 100%; display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-top: 8px;">
                 <span style="font-size: 13px; color: #666;">切换账号:</span>
                 <select v-model="currentUserId" @change="handleUserSwitch" class="time-select-style"
                     style="padding: 4px 8px;">
@@ -43,10 +47,6 @@
                     </option>
                 </select>
             </div>
-
-            <button @click="logout" class="logout-btn-style">
-                退出登录
-            </button>
         </div>
 
         <div class="category-tabs">
@@ -134,17 +134,17 @@
                 </button>
 
                 <!-- 💡 新增：数据导出与导入按钮（隐藏的 file input 用于选择导入文件） -->
-                <button @click="exportLocalStorage" class="toolbar-btn-style" style="background: #27ae60;">
-                    📥 导出数据
+                <button @click="exportLocalStorage" class="toolbar-btn-style">
+                    导出
                 </button>
-                <button @click="triggerImport" class="toolbar-btn-style" style="background: #e67e22;">
-                    📤 导入数据
+                <button @click="triggerImport" class="toolbar-btn-style">
+                    导入
                 </button>
                 <input type="file" ref="fileInput" @change="importLocalStorage" accept=".json" style="display: none;" />
 
                 <!-- 右侧新增的回收站按钮 -->
                 <button onclick="window.location.href='trash.html'" class="trash-btn-style">
-                    🗑️ 回收站
+                    回收站
                 </button>
             </div>
 
