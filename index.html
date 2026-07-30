@@ -19,7 +19,9 @@
     <!-- 引入外部样式文件 -->
     <link rel="stylesheet" href="./css/style.css">
 
-    <link rel="manifest" href="./manifest.json">
+    <!-- manifest.json（全称通常为 Web App Manifest）是一个简单的 JSON 文件，它是 PWA（渐进式网页应用，Progressive Web App） 技术的核心配置文件。 -->
+    <!-- <link rel="manifest" href="./manifest.json"> -->
+
     <link rel="shortcut icon" href="./assets/images/favicon.ico" type="image/x-icon">
     <link rel="icon" sizes="32x32" href="./assets/images/favicon.ico">
 </head>
@@ -36,7 +38,7 @@
                 <span style="font-size: 13px; color: #666;">切换账号:</span>
                 <select v-model="currentUserId" @change="handleUserSwitch" class="time-select-style"
                     style="padding: 4px 8px;">
-                    <option v-for="id in allDiscoveredUserIds" :key="id" :value="id">
+                    <option v-for="id in discoveredUserIds" :key="id" :value="id">
                         ID: {{ id }} {{ id === currentUserId ? '(当前)' : '' }}
                     </option>
                 </select>
@@ -94,7 +96,7 @@
                     <input type="checkbox" class="todo-checkbox" v-model="item.isCompleted" :true-value="1"
                         :false-value="0" @change="handleStatusToggle(item)" />
 
-                    <span class="title" @click="updateTodoTitle(item)" class="item-title-style">
+                    <span class="title item-title-style" @click="updateTodoTitle(item)">
                         <strong>{{ item.title }}</strong>
                     </span>
                 </div>
@@ -104,12 +106,11 @@
                     <div class="time-selector">
 
                         <span v-if="item.dueDate === '2111-11-11'" class="daily-label">
-                            <button type="button" @click.stop="updateToday(item)" class="daily-btn-style">
+                            <button type="button" @click.stop="openDateDialog(item)" class="daily-btn-style">
                                 每日
                             </button>
                         </span>
 
-                        <!-- <input v-else type="date" v-model="item.dueDate" @change="updateTime(item)" -->
                         <input v-else type="date" v-model="item.dueDate" @input="handleDateClear($event, item)"
                             class="date-input-style" />
                         <select v-model="item.startTime" @change="updateTime(item)" class="time-select-style">
@@ -154,39 +155,39 @@
 
         <!-- 💬 修改任务内容和分类的对话框 -->
         <dialog ref="updateDialog" class="dialog-base-style">
-            <form method="dialog" @submit.prevent="saveUpdate">
+            <form method="dialog" @submit.prevent="updateDialogSubmit">
                 <h3>修改任务</h3>
                 <p>内容: <input v-model="tempTitle" type="text" class="dialog-input-style" /></p>
-                <p>描述: <input v-model="tempDesc" class="dialog-input-style" /></p>
+                <p>描述: <textarea v-model="tempDesc" class="dialog-input-style" rows="3"
+                        style="resize: vertical;"></textarea></p>
                 <p>分类:
                     <select v-model="tempCatId" class="dialog-input-style">
                         <option v-for="cat in dbCategories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
                     </select>
                 </p>
                 <div class="dialog-footer-style">
-                    <button type="submit" class="dialog-submit-btn">确认修改</button>
-                    <button type="button" onclick="this.closest('dialog').close()" class="dialog-cancel-btn">取消</button>
+                    <button type="submit" class="dialog-submit-btn">确定</button>
+                    <button type="button" @click="updateDialogCancel" class="dialog-cancel-btn">取消</button>
                 </div>
             </form>
         </dialog>
 
         <!-- 日期修改对话框 -->
         <dialog ref="dateDialog" class="dialog-base-style">
-            <form method="dialog" @submit.prevent="confirmDateUpdate">
+            <form method="dialog" @submit.prevent="dateDialogSubmit">
                 <h3>修改截止日期</h3>
                 <p>输入日期 (YYYY-MM-DD):</p>
                 <input v-model="tempDate" type="date" class="dialog-input-style" />
                 <div class="dialog-footer-style">
-                    <button type="submit" class="dialog-submit-btn">确认</button>
-                    <button type="button" onclick="this.closest('dialog').close()"
-                        class="dialog-cancel-btn-ml">取消</button>
+                    <button type="submit" class="dialog-submit-btn">确定</button>
+                    <button type="button" @click="dateDialogCancel" class="dialog-cancel-btn-ml">取消</button>
                 </div>
             </form>
         </dialog>
 
-        <!-- 💡 通用消息提示与确认对话框 (支持确认/取消双按钮及“下次不再提示”) -->
+        <!-- 💡 通用消息提示与确认对话框 -->
         <dialog ref="msgDialog" class="msg-dialog-style">
-            <form method="dialog" @submit.prevent="handleDialogConfirm">
+            <form method="dialog" @submit.prevent="msgDialogSubmit">
                 <h3 class="msg-title-style">提示</h3>
                 <p>{{ dialogMessage }}</p>
 
@@ -200,7 +201,7 @@
 
                 <div class="msg-footer-style">
                     <button type="submit" class="msg-confirm-btn">确定</button>
-                    <button v-if="isConfirmMode" type="button" @click="handleDialogCancel"
+                    <button v-if="isConfirmMode" type="button" @click="msgDialogCancel"
                         class="msg-cancel-btn">取消</button>
                 </div>
             </form>

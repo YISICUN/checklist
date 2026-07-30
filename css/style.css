@@ -372,7 +372,17 @@
 
  .dialog-input-style {
      width: 100%;
-     padding: 5px;
+     /* 撑满容器 */
+     min-height: 20px;
+     /* 最小高度 */
+     resize: vertical;
+     /* 允许用户上下拖拽调整大小 */
+     font-family: inherit;
+     /* 继承全局字体，保持美观 */
+     padding: 6px;
+     /* 内部留白 */
+     box-sizing: border-box;
+     /* 防止 padding 把宽度撑破 */
  }
 
  .dialog-footer-style {
@@ -385,16 +395,17 @@
      color: white;
  }
 
- .dialog-cancel-btn {
-     background: #3498db;
+ .dialog-cancel-btn,
+ .dialog-cancel-btn-ml {
+     background: #95a5a6;
+     /* 改为灰色，符合常规 UI 规范 */
      color: white;
      margin-left: 10px;
  }
 
- .dialog-cancel-btn-ml {
-     background: #3498db;
-     color: white;
-     margin-left: 10px;
+ .dialog-cancel-btn:hover,
+ .dialog-cancel-btn-ml:hover {
+     background: #7f8c8d;
  }
 
  .msg-dialog-style {

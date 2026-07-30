@@ -94,12 +94,9 @@
         </div>
 
         <form @submit.prevent="login">
-            <input name="loginUsername" ref="userField" v-if="isUsernameLogin" v-model="loginForm.username" type="text"
-                placeholder="用户名">
-            <input name="loginId" ref="idField" v-else v-model="loginForm.id" type="text" placeholder="用户ID">
-
+            <input ref="inputField" v-model="loginForm.account" type="text"
+                :placeholder="isUsernameLogin ? '用户名' : '用户ID'">
             <input name="loginPassword" v-model="loginForm.password" type="password" placeholder="密码">
-
             <button type="submit" :disabled="isLoading">{{ isLoading ? '登录中...' : '登录' }}</button>
         </form>
 
@@ -129,8 +126,7 @@
         createApp({
             setup() {
                 const loginForm = reactive({
-                    id: '',
-                    username: '', // 必须在这里先定义好
+                    account: '', // 统一接收用户名或 ID
                     password: ''
                 });
                 const isUsernameLogin = ref(false); // 默认 ID 登录
@@ -139,69 +135,6 @@
                 // 快速登录相关变量
                 const selectedQuickUser = ref('');
                 const discoveredUserIds = ref([]);
-
-                // 💡 已增强：扫描本地出现过的所有 userId（支持读取 logged_users、userId 键、以及深度解析 JSON 内部的 userId）
-                const scanLocalUserIds = () => {
-                    const idSet = new Set();
-
-                    // 1. 检查全局账号池记录
-                    const storedUsers = localStorage.getItem('logged_users');
-                    if (storedUsers) {
-                        try {
-                            const parsedUsers = JSON.parse(storedUsers);
-                            if (Array.isArray(parsedUsers)) {
-                                parsedUsers.forEach(id => idSet.add(String(id)));
-                            }
-                        } catch (e) { }
-                    }
-
-                    // 2. 检查当前的 userId
-                    const currentUserId = localStorage.getItem('userId');
-                    if (currentUserId) idSet.add(String(currentUserId));
-
-                    // 3. 遍历整个 localStorage 键名和对应的值，深度提取隐藏的 userId
-                    for (let i = 0; i < localStorage.length; i++) {
-                        const key = localStorage.key(i);
-                        const value = localStorage.getItem(key);
-
-                        // 兼容命名格式：匹配下划线加数字结尾，如 _44, _1
-                        const match1 = key.match(/_(\d+)$/);
-                        if (match1 && match1[1]) {
-                            idSet.add(match1[1]);
-                        }
-
-                        // 尝试解析 Value 是否为 JSON（对象或数组），如果是，则递归查找里面所有的 userId 字段
-                        if (value && (value.startsWith('[') || value.startsWith('{'))) {
-                            try {
-                                const parsedData = JSON.parse(value);
-                                const findUserIds = (obj) => {
-                                    if (!obj || typeof obj !== 'object') return;
-                                    for (let k in obj) {
-                                        if (k === 'userId' && obj[k] !== undefined && obj[k] !== null) {
-                                            idSet.add(String(obj[k]));
-                                        } else if (typeof obj[k] === 'object') {
-                                            findUserIds(obj[k]);
-                                        }
-                                    }
-                                };
-                                findUserIds(parsedData);
-                            } catch (e) { }
-                        }
-
-                        // 匹配键名或包含的合理数字
-                        const matchAllNums = key.match(/\d+/g);
-                        if (matchAllNums) {
-                            matchAllNums.forEach(num => {
-                                if (num.length <= 6) {
-                                    idSet.add(num);
-                                }
-                            });
-                        }
-                    }
-
-                    // 转换为数字排序，让下拉框井井有条
-                    discoveredUserIds.value = Array.from(idSet).sort((a, b) => Number(a) - Number(b));
-                };
 
                 // 下拉框选中后直接免密跳转到 index.html
                 const handleQuickSelect = () => {
@@ -237,11 +170,12 @@
                 // 获取全局 api 实例
                 const request = window.api;
 
+                // 登录提交
                 const login = async () => {
                     // 根据当前模式选择发送的字段
                     const payload = isUsernameLogin.value
-                        ? { username: loginForm.username, password: loginForm.password }
-                        : { id: loginForm.id, password: loginForm.password };
+                        ? { username: loginForm.account, password: loginForm.password }
+                        : { id: loginForm.account, password: loginForm.password };
 
                     if (!payload.password || (!payload.id && !payload.username)) {
                         return showDialog("请填写完整");
@@ -253,7 +187,7 @@
                         const res = await request.post('/auth/login', payload);
                         if (res.data.code === 200) {
                             // 修正：先正确获取登录后的 id，再写入 localStorage 和 logged_users
-                            const loggedId = String(res.data.data.id || (isUsernameLogin.value ? loginForm.username : loginForm.id));
+                            const loggedId = String(res.data.data.id || loginForm.account);
                             localStorage.setItem('userId', loggedId);
 
                             // 同步更新到全局已登录账号池中
@@ -301,32 +235,28 @@
                     }
                 };
 
-                // 自动聚焦
-                const userField = ref(null);
-                const idField = ref(null);
-
-                // 2. 封装一个公共的聚焦函数
+                // 封装一个公共的聚焦函数
+                let focusTimer = null;
                 const focusInput = () => {
                     // 💡 新增：强制聚焦到输入框
-                    setTimeout(() => {
-                        if (isUsernameLogin.value) {
-                            userField.value?.focus();
-                        } else {
-                            idField.value?.focus();
-                        }
-                    }, 500); // 延迟 500ms，确保数据加载完成且 DOM 渲染完毕
+                    if (focusTimer) clearTimeout(focusTimer);
+                    focusTimer = setTimeout(() => {
+                        inputField.value?.focus();
+                    }, 300); // 延迟，确保数据加载完成且 DOM 渲染完毕
                 };
 
-
-                // 3. 在 onMounted 中调用，确保页面加载即聚焦
+                // 在 onMounted 中调用，确保页面加载即聚焦
                 onMounted(() => {
-                    scanLocalUserIds(); // 页面加载时扫描本地账号
+                    // 页面加载时扫描本地账号
+                    discoveredUserIds.value = window.scanLocalUserIds();
                     focusInput();
                 });
 
                 // 切换登录方式的方法
                 const toggleLogin = () => {
                     isUsernameLogin.value = !isUsernameLogin.value;
+                    // 切换时清空对应的值（视业务需求而定）
+                    loginForm.account = '';
                     focusInput();
                 };
 
@@ -335,9 +265,6 @@
                     isUsernameLogin,
                     isLoading,
                     login,
-                    userField,
-                    idField,
-                    focusInput,
                     toggleLogin,
                     msgDialog,
                     dialogMessage,

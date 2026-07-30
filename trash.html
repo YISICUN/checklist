@@ -83,11 +83,11 @@
         </div>
 
         <p v-if="loading" style="color: #3498db;">正在加载回收站数据...</p>
-        <!-- 💡 视图渲染改用 filteredTrashList 判断和遍历 -->
-        <p v-else-if="filteredTrashList.length === 0" style="color: #7f8c8d;">回收站是空的~</p>
+        <!-- 💡 视图渲染改用 filteredtodoList 判断和遍历 -->
+        <p v-else-if="filteredtodoList.length === 0" style="color: #7f8c8d;">回收站是空的~</p>
 
         <div v-else>
-            <div v-for="item in filteredTrashList" :key="item.id" class="item">
+            <div v-for="item in filteredtodoList" :key="item.id" class="item">
                 <div style="display: flex; gap: 8px;">
                     <button @click="restoreItem(item.id)" style="background: #3498db; padding: 4px 8px;">还原</button>
                 </div>
@@ -121,11 +121,11 @@
     <script src="js/api.js"></script>
 
     <script>
-        const { createApp, ref, computed, onMounted } = Vue;
+        const { createApp, ref, computed, onMounted, watch } = Vue;
 
         createApp({
             setup() {
-                const trashList = ref([]);
+                const todoList = ref([]);
                 const loading = ref(true);
                 const msgDialog = ref(null);
                 const dialogMessage = ref("");
@@ -151,9 +151,9 @@
                 };
 
                 // 💡 计算属性：根据 deleteFlag 过滤，并按更新时间倒序排序
-                const filteredTrashList = computed(() => {
-                    return trashList.value
-                        .filter(item => Number(item.deleteFlag) !== 0)
+                const filteredtodoList = computed(() => {
+                    return todoList.value
+                        .filter(item => Number(item.deleteFlag) === 1)
                         .sort((a, b) => {
                             const timeA = new Date(a.updateTime || 0).getTime();
                             const timeB = new Date(b.updateTime || 0).getTime();
@@ -161,7 +161,13 @@
                         });
                 });
 
-                // 加载回收站数据：将完整数据存入 trashList，并同步到 localStorage
+                // 监听 todoList 的变化，自动实现数据持久化（LocalStorage）
+                watch(todoList, (newValue) => {
+                    const storageKey = getStorageKey(); // 👈 获取当前用户的专属 Key
+                    localStorage.setItem(storageKey, JSON.stringify(newValue));
+                }, { deep: true });
+
+                // 加载回收站数据：将完整数据存入 todoList，并同步到 localStorage
                 const loadTrash = async () => {
                     loading.value = true;
                     const storageKey = getStorageKey();
@@ -170,10 +176,8 @@
                         // 1. 优先尝试从后端获取最新的全量数据
                         const response = await request.get('/item/list');
                         if (response.data.code === 200) {
-                            trashList.value = response.data.data;
-
-                            // 💡 核心：将全量数据备份到其专属的缓存 Key 中
-                            localStorage.setItem(storageKey, JSON.stringify(trashList.value));
+                            // 💡 核心：将全量数据备份到其专属的缓存 Key 中,监听 todoList 的变化，自动实现数据持久化（LocalStorage）
+                            todoList.value = response.data.data;
                         } else {
                             showDialog("加载回收站失败: " + response.data.message);
                         }
@@ -184,14 +188,14 @@
                         const localData = localStorage.getItem(storageKey);
                         if (localData) {
                             try {
-                                trashList.value = JSON.parse(localData);
-                                showDialog("当前处于离线状态，正在显示本地缓存的数据。");
+                                todoList.value = JSON.parse(localData);
+                                console.log("当前处于离线状态，正在显示本地缓存的数据。");
                             } catch (parseErr) {
                                 console.error("解析本地数据失败", parseErr);
-                                trashList.value = [];
+                                todoList.value = [];
                             }
                         } else {
-                            trashList.value = [];
+                            todoList.value = [];
                             showDialog("当前无网络连接，且没有该用户的本地缓存数据。");
                         }
                     } finally {
@@ -203,17 +207,18 @@
                 const restoreItem = async (id) => {
                     try {
                         const response = await request.post(`/item/restore/${id}`).catch(() => null);
-
-                        const storageKey = getStorageKey();
-                        const target = trashList.value.find(item => item.id === id);
+                        const target = todoList.value.find(item => item.id === id);
                         if (target) {
+                            // todoList 的变化会被监听，自动实现数据持久化（LocalStorage）
                             target.deleteFlag = 0;
-                            localStorage.setItem(storageKey, JSON.stringify(trashList.value));
                         }
-
-                        loadTrash();
+                        if (response && response.data.code === 200) {
+                            console.log("restoreItem后端请求成功");
+                        } else {
+                            console.log("restoreItem后端请求失败，已通过本地 watch 自动完成离线兜底");
+                        }
                     } catch (err) {
-                        showDialog("操作失败");
+                        showDialog("网络异常，操作失败");
                     }
                 };
 
@@ -223,11 +228,13 @@
                         const response = await request.post(`/item/clean/${id}`).catch(() => null);
 
                         // 无论后端是否成功，本地缓存也同步更新（直接从总列表中彻底移除该项）
-                        const storageKey = getStorageKey();
-                        trashList.value = trashList.value.filter(item => item.id !== id);
-                        localStorage.setItem(storageKey, JSON.stringify(trashList.value));
-
-                        loadTrash();
+                        // todoList 的变化会被监听，自动实现数据持久化（LocalStorage）
+                        todoList.value = todoList.value.filter(item => item.id !== id);
+                        if (response && response.data.code === 200) {
+                            console.log("permanentDelete后端请求成功");
+                        } else {
+                            console.log("permanentDelete后端请求失败，已通过本地 watch 自动完成离线兜底");
+                        }
                     } catch (err) {
                         showDialog("操作失败");
                     }
@@ -252,8 +259,8 @@
                 });
 
                 return {
-                    trashList,
-                    filteredTrashList,
+                    todoList,
+                    filteredtodoList,
                     loading,
                     msgDialog,
                     dialogMessage,
