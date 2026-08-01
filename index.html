@@ -88,7 +88,15 @@
         <div id="todo-list">
             <p v-if="loading" class="loading-tip-style">正在加载云端数据...</p>
 
-            <p v-else-if="filteredTodoList.length === 0" class="empty-tip-style">目前没有任务，快去添加一个吧！</p>
+            <div v-else-if="filteredTodoList.length === 0" style="text-align: center; padding: 20px;">
+                <p class="empty-tip-style" style="margin-bottom: 10px;">目前没有任务，快去添加一个吧！</p>
+                <!-- 💡 新增：导入模板按钮（根据当前选中的分页/分类名称或 activeCategory 动态显示或提供选择） -->
+                <button @click="importTemplateToCurrentCategory" class="action-btn-blue"
+                    style="padding: 6px 14px; font-size: 13px;">
+                    📥 导入【{{ activeCategory.name }}】模板
+                </button>
+            </div>
+
             <div v-else v-for="item in filteredTodoList" :key="item.id" class="item"
                 :class="{ completed: item.isCompleted === 1, updating: item.isUpdating }">
 
@@ -147,6 +155,9 @@
                     回收站
                 </button>
             </div>
+
+            <!-- 在适当的位置（例如回收站旁边或导入按钮下方）添加 -->
+            <button class="btn btn-danger" @click="clearTemplateTodos">一键清空模板任务</button>
 
             <!-- 底部空白占位符，防止手机底栏遮挡 -->
             <div class="spacer-style"></div>

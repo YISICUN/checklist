@@ -61,6 +61,29 @@
             border-radius: 4px;
             border-left: 4px solid #3498db;
         }
+
+        .spacer-style {
+            height: 100px;
+        }
+
+        /* 💡 新增：手机端适配（与 index.html 保持一致） */
+        @media (max-width: 600px) {
+            body {
+                margin: 0;
+                /* 去掉手机端左右留白 */
+            }
+
+            .container {
+                max-width: 100%;
+                /* 宽度撑满 */
+                border-radius: 0;
+                /* 去掉圆角，更像原生 APP */
+                box-shadow: none;
+                /* 去掉阴影，减少视觉干扰 */
+                min-height: 100vh;
+                /* 确保背景色铺满全屏 */
+            }
+        }
     </style>
 </head>
 
@@ -68,11 +91,12 @@
 
     <div id="app" class="container">
 
-        <!-- 🚀 首行靠右加一个“恢复删除提示”的按钮 -->
-        <div class="header-row">
-            <h2>🗑️ 回收站</h2>
+        <!-- 头部行：标题居左，按钮换行并靠右 -->
+        <div class="header-row"
+            style="display: flex; flex-direction: column; align-items: flex-start; gap: 10px; margin-bottom: 15px;">
+            <h2 style="margin: 0;">🗑️ 回收站</h2>
 
-            <div style="display: flex; gap: 10px;">
+            <div style="display: flex; gap: 10px; width: 100%; justify-content: flex-end;">
                 <button @click="resetDeleteTip" style="background: #3498db; font-size: 13px;">
                     恢复删除提示
                 </button>
@@ -87,21 +111,31 @@
         <p v-else-if="filteredtodoList.length === 0" style="color: #7f8c8d;">回收站是空的~</p>
 
         <div v-else>
-            <div v-for="item in filteredtodoList" :key="item.id" class="item">
-                <div style="display: flex; gap: 8px;">
-                    <button @click="restoreItem(item.id)" style="background: #3498db; padding: 4px 8px;">还原</button>
+            <div v-for="item in filteredtodoList" :key="item.id" class="item"
+                style="flex-direction: column; align-items: stretch; gap: 8px;">
+                <!-- 第一行：还原按钮 + 标题 -->
+                <div style="display: flex; align-items: center; width: 100%;">
+                    <div style="display: flex; gap: 8px;">
+                        <button @click="restoreItem(item.id)" style="background: #3498db; padding: 4px 8px;">还原</button>
+                    </div>
+                    <!-- 标题靠左，margin-right: auto 把右侧空间撑开 -->
+                    <span style="margin-right: auto; margin-left: 12px; font-weight: 500;">{{ item.title }}</span>
                 </div>
-                <!-- 中间：title 靠左，margin-right: auto 把右侧空间撑开 -->
-                <span style="margin-right: auto; margin-left: 12px;">{{ item.title }}</span>
 
-                <!-- 💡 右侧区域：更新时间 + 彻底删除按钮 -->
-                <div style="display: flex; align-items: center; gap: 12px;">
-                    <span style="font-size: 12px; color: #999;">最终更新时间:{{ formatTime(item.updateTime) }}</span>
+                <!-- 第二行：最终更新时间 + 彻底删除按钮（靠右对齐） -->
+                <div style="display: flex; align-items: center; justify-content: flex-end; gap: 12px; width: 100%;">
+                    <span
+                        style="font-size: 12px; color: #999; display: inline-flex; flex-direction: column; text-align: right;">
+                        <span>最终更新时间:{{ formatTime(item.updateTime) }}</span>
+                    </span>
                     <button @click="permanentDelete(item.id)"
                         style="background: #e74c3c; padding: 4px 8px;">彻底删除</button>
                 </div>
             </div>
         </div>
+
+        <!-- 底部空白占位符，防止手机底栏遮挡 -->
+        <div class="spacer-style"></div>
 
         <!-- 💡 通用提示框 -->
         <dialog ref="msgDialog"
@@ -135,12 +169,6 @@
                     msgDialog.value.showModal();
                 };
 
-                // 根据当前用户动态生成 Storage Key,针对不同用户使用独立的缓存 Key，避免数据串号
-                const getStorageKey = () => {
-                    const userId = localStorage.getItem('userId') || 'default';
-                    return `todo_list_data_${userId}`;
-                };
-
                 // 把全局挂载的请求工具拿过来，给它起个本地名字叫 request
                 const request = window.api;
 
@@ -163,19 +191,22 @@
 
                 // 监听 todoList 的变化，自动实现数据持久化（LocalStorage）
                 watch(todoList, (newValue) => {
-                    const storageKey = getStorageKey(); // 👈 获取当前用户的专属 Key
+                    const storageKey = window.getStorageKey(); // 👈 获取当前用户的专属 Key
                     localStorage.setItem(storageKey, JSON.stringify(newValue));
                 }, { deep: true });
 
                 // 加载回收站数据：将完整数据存入 todoList，并同步到 localStorage
                 const loadTrash = async () => {
                     loading.value = true;
-                    const storageKey = getStorageKey();
+                    const storageKey = window.getStorageKey();
 
                     try {
                         // 1. 优先尝试从后端获取最新的全量数据
                         const response = await request.get('/item/list');
                         if (response.data.code === 200) {
+                            // 先执行一次同步（把之前断网时存的本地数据传上去）
+                            await window.syncImportedDataToDB();
+
                             // 💡 核心：将全量数据备份到其专属的缓存 Key 中,监听 todoList 的变化，自动实现数据持久化（LocalStorage）
                             todoList.value = response.data.data;
                         } else {

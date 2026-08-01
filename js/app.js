@@ -121,7 +121,7 @@ createApp({
 
         // 监听 todoList 的变化，自动实现数据持久化（LocalStorage）
         watch(todoList, (newValue) => {
-            const storageKey = getStorageKey(); // 👈 获取当前用户的专属 Key
+            const storageKey = window.getStorageKey(); // 👈 获取当前用户的专属 Key
             localStorage.setItem(storageKey, JSON.stringify(newValue));
         }, { deep: true });
 
@@ -133,7 +133,8 @@ createApp({
             { id: 4, name: '工作' },
             { id: 5, name: '英语' },
             { id: 6, name: '阅读' },
-            { id: 7, name: '健康' }
+            { id: 7, name: '健康' },
+            { id: 8, name: '证券系统设计书改修与测试检查清单' }
         ]);
 
         // 2. 构造一个包含“全部”的完整分类列表
@@ -152,7 +153,7 @@ createApp({
                 // 1. 加上离线兜底，防止断网时报错
                 const response = await request.get('/category/list').catch(() => null);
                 // 2. 只有请求成功拿到数据时才更新
-                if (response && response.data.code === 200) {
+                if (response && Array.isArray(response.data)) {
                     dbCategories.value = response.data;
 
                     // 3. 必须保留这个状态恢复，防止当前选中分类丢失引用
@@ -164,12 +165,6 @@ createApp({
             } catch (error) {
                 console.error("加载分类失败", error);
             }
-        };
-
-        // 根据当前用户动态生成 Storage Key
-        const getStorageKey = () => {
-            const userId = localStorage.getItem('userId') || 'default';
-            return `todo_list_data_${userId}`;
         };
 
         // 时间选择器选项生成（每半小时一个选项）
@@ -223,7 +218,7 @@ createApp({
                 });
             };
 
-            const storageKey = getStorageKey(); // 👈 获取当前用户的专属 Key
+            const storageKey = window.getStorageKey(); // 👈 获取当前用户的专属 Key
 
             try {
                 // 1. 先尝试秒开：读取本地缓存并处理高亮后立即渲染
@@ -251,7 +246,7 @@ createApp({
 
                 if (response && response.data.code === 200) {
                     // 先执行一次同步（把之前断网时存的本地数据传上去）
-                    await syncImportedDataToDB();
+                    await window.syncImportedDataToDB();
 
                     // 然后再正常处理数据并更新视图,之后,watch会自动持久化存入 localStorage，确保删除进回收站时能读取到
                     todoList.value = processItems(response.data.data);
@@ -446,6 +441,7 @@ createApp({
 
         // 📝 修改任务文本内容
         const updateTodoTitle = async (item) => {
+            // 弹窗...留作纪念
             const newTitle = prompt("修改任务内容:", item.title);
 
             // 逻辑守门员：处理空值、无变化或取消的情况
@@ -780,7 +776,7 @@ createApp({
                     const rawData = JSON.parse(e.target.result);
 
                     // 构造当前用户应有的精准 Key
-                    const storageKey = getStorageKey();
+                    const storageKey = window.getStorageKey();
 
                     // 检查导入的数据中是否存在当前用户的 Key
                     // 格式 ：整个文件是一个包含多个 Key-Value 的大对象字典（包含了各个 Key）
@@ -803,7 +799,7 @@ createApp({
                     localStorage.setItem(storageKey, finalValue);
 
                     // 💡 核心新增：数据写入 localStorage 后，执行比对并更新进 DB
-                    await syncImportedDataToDB();
+                    await window.syncImportedDataToDB();
 
                     // 数据导入成功,触发刷新
                     showDialog(`数据导入成功！已成功加载并同步当前账号 (ID: ${currentUserId.value}) 的待办数据。点击确定后将刷新页面。`);
@@ -818,80 +814,91 @@ createApp({
             reader.readAsText(file);
         };
 
-        // 💡 新增/更新：将 localStorage 中导入的数据与 DB 比对，若不存在则调用 add，若 updateTime 大于 DB 则调用 update
-        const syncImportedDataToDB = async () => {
-            const storageKey = getStorageKey();
-            const localDataStr = localStorage.getItem(storageKey);
-            if (!localDataStr) return;
+        // 将对应模板的标题批量导入到当前分类（分页）下
+        const importTemplateToCurrentCategory = async () => {
+            const currentCatId = activeCategory.value.id;
+            const currentCatName = activeCategory.value.name;
 
-            let localItems = [];
-            try {
-                localItems = JSON.parse(localDataStr);
-            } catch (e) {
-                console.error("解析本地导入数据失败", e);
+            // 逻辑守门员：如果当前在“全部”分页（id=0），提示用户
+            if (currentCatId === 0) {
+                showDialog("请先选择一个具体的分类，再导入对应的模板！");
                 return;
             }
 
-            if (!Array.isArray(localItems) || localItems.length === 0) return;
+            try {
+                // 💡 改为传 templateId 参数（直接使用当前的分类 ID，或者你也可以将其映射为固定的字符串如 'sec_design_fix_01'）
+                // 假设你的后端接口是根据 templateId 查询的：
+                const response = await request.get(`/template/list?templateId=sec_design_fix_01`);
+                // 或者如果是直接用数字 id 匹配：
+                // const response = await request.get(`/template/list?templateId=${currentCatId}`);
+
+                if (response && response.data && response.data.code === 200 && response.data.data.length > 0) {
+                    const titles = response.data.data; // 纯标题数组 List<String>
+
+                    for (const titleText of titles) {
+                        await request.post('/item/add', {
+                            title: titleText,
+                            categoryId: currentCatId,
+                            isCompleted: 0
+                        });
+                    }
+
+                    showDialog(`成功导入【${currentCatName}】模板数据！`);
+                    loadTodos();
+                } else {
+                    showDialog(`未找到与【${currentCatName}】相关的模板数据`);
+                }
+            } catch (err) {
+                console.error("导入模板失败", err);
+                showDialog("网络异常，模板导入失败");
+            }
+        };
+
+        // 🧹 一键清空当前分类下属于该模板的任务（使用 POST 请求）
+        const clearTemplateTodos = async () => {
+            const currentCatId = activeCategory.value.id;
+            const currentCatName = activeCategory.value.name;
+            const userId = currentUserId.value; // 👈 获取当前登录用户的 ID
+
+            if (currentCatId === 0) {
+                showDialog("请先选择一个具体的分类！");
+                return;
+            }
+
+            const confirmed = await showConfirm(`确定要清空【${currentCatName}】下所有与模板匹配的任务吗？`);
+            if (!confirmed) return;
 
             try {
-                // 1. 获取后端当前的最新数据列表，用于对比
-                const response = await request.get('/item/list').catch(() => null);
-                if (!response || response.data.code !== 200) {
-                    console.error("获取云端数据失败，无法进行比对同步");
-                    return;
-                }
+                // 💡 拼接 userId 参数
+                const response = await request.post(`/template/clear-category-template?userId=${userId}&categoryId=${currentCatId}&templateId=sec_design_fix_01`);
 
-                const dbItems = response.data.data || [];
-                // 将 DB 数据转为以 id 为 key 的 Map，方便快速查找
-                const dbItemMap = new Map();
-                dbItems.forEach(dbItem => {
-                    dbItemMap.set(dbItem.id, dbItem);
-                });
+                if (response && response.data && response.data.code === 200) {
+                    // 2. 先获取该模板对应的标题列表（可以从后端实时拿，也可以直接调用模板列表接口）
+                    const templateRes = await request.get(`/template/list?templateId=sec_design_fix_01`).catch(() => null);
 
-                // 2. 遍历本地导入的数据
-                for (const localItem of localItems) {
-                    const dbItem = dbItemMap.get(localItem.id);
+                    if (templateRes && templateRes.data && templateRes.data.code === 200) {
+                        const templateTitles = templateRes.data.data || [];
 
-                    if (!dbItem) {
-                        // 💡 情况 A：DB 里没有这条数据，调用添加接口 (add)
-                        console.log(`云端未找到任务 [ID: ${localItem.id}]，正在执行新增插入...`);
-                        await request.post('/item/add', {
-                            title: localItem.title,
-                            categoryId: localItem.categoryId || 1,
-                            isCompleted: localItem.isCompleted || 0,
-                            dueDate: localItem.dueDate || '2111-11-11',
-                            startTime: localItem.startTime || '08:00',
-                            description: localItem.description || ''
-                        }).catch(err => {
-                            console.error(`新增任务 [ID: ${localItem.id}] 到 DB 失败:`, err);
+                        // 3. 💡 手动清理内存中的 todoList（过滤掉当前分类下、且 title 属于模板标题的任务）
+                        todoList.value = todoList.value.filter(item => {
+                            const isMatchCategory = Number(item.categoryId) === Number(currentCatId);
+                            const isMatchTitle = templateTitles.includes(item.title);
+                            // 如果既属于当前分类又在模板标题内，则将其过滤掉（删除）
+                            return !(isMatchCategory && isMatchTitle);
                         });
-                    } else {
-                        // 💡 情况 B：DB 里存在该条数据，检查 updateTime 是否大于云端
-                        const localUpdateTime = localItem.updateTime ? new Date(localItem.updateTime).getTime() : 0;
-                        const dbUpdateTime = dbItem.update_time || dbItem.updateTime ? new Date(dbItem.update_time || dbItem.updateTime).getTime() : 0;
 
-                        if (localUpdateTime > dbUpdateTime) {
-                            console.log(`本地任务 [ID: ${localItem.id}] 的 updateTime 大于云端，正在更新至 DB...`);
-
-                            // 调用后端更新接口 (update)
-                            await request.post('/item/update', {
-                                id: localItem.id,
-                                title: localItem.title,
-                                isCompleted: localItem.isCompleted,
-                                dueDate: localItem.dueDate,
-                                startTime: localItem.startTime,
-                                categoryId: localItem.categoryId,
-                                description: localItem.description
-                            }).catch(err => {
-                                console.error(`更新任务 [ID: ${localItem.id}] 到 DB 失败:`, err);
-                            });
-                        }
+                        // 4. 💡 手动将过滤后的最新数组同步更新写入 localStorage
+                        const storageKey = window.getStorageKey();
+                        localStorage.setItem(storageKey, JSON.stringify(todoList.value));
                     }
+
+                    showDialog("模板任务及本地缓存已清空！");
+                } else {
+                    showDialog(response.data.message || "清空失败");
                 }
-                console.log("导入数据的云端比对、新增与更新检查已全部完成。");
             } catch (err) {
-                console.error("同步导入数据到 DB 发生异常:", err);
+                console.error("清空模板任务失败", err);
+                showDialog("网络异常，清空失败");
             }
         };
 
@@ -951,7 +958,6 @@ createApp({
             showConfirm,
             showDialog,
             showDontAskAgain,
-            syncImportedDataToDB,
             tempCatId,
             tempDate,
             tempDesc,
@@ -964,7 +970,9 @@ createApp({
             updateDialogCancel,
             updateDialogSubmit,
             updateTime,
-            updateTodoTitle
+            updateTodoTitle,
+            importTemplateToCurrentCategory,
+            clearTemplateTodos
         };
     }
 }).mount('#app'); // 挂载容器
